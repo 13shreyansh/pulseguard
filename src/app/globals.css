@@ -1,14 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --background: #eef3f0;
-  --foreground: #101817;
+  --pulse-bg: #081116;
+  --pulse-bg-soft: #0a141a;
+  --pulse-panel: #0d171d;
+  --pulse-panel-elevated: #111f27;
+  --pulse-panel-soft: #13242d;
+  --pulse-border: rgba(255, 255, 255, 0.1);
+  --pulse-border-strong: rgba(255, 255, 255, 0.18);
+  --pulse-text: #f8f4ec;
+  --pulse-muted: #8b98a5;
+  --pulse-muted-strong: #b6c0ca;
+  --pulse-red: #d92d38;
+  --pulse-red-deep: #a51d2a;
+  --pulse-red-soft: rgba(217, 45, 56, 0.16);
+  --pulse-green: #35a66a;
+  --pulse-green-soft: rgba(53, 166, 106, 0.14);
+  --pulse-warning: #e8b350;
+  --pulse-warning-soft: rgba(232, 179, 80, 0.14);
+  --background: var(--pulse-bg);
+  --foreground: var(--pulse-text);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: Arial, Helvetica, sans-serif;
+  --font-sans: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -17,112 +34,130 @@
 }
 
 html {
-  background: var(--background);
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 30% 10%, rgba(217, 45, 56, 0.12), transparent 30rem),
+    radial-gradient(circle at 85% 20%, rgba(53, 166, 106, 0.09), transparent 28rem),
+    var(--pulse-bg);
 }
 
 body {
   min-width: 320px;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 28rem),
+    var(--pulse-bg);
+  color: var(--pulse-text);
+  font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
+}
+
+button,
+textarea {
+  font-family: inherit;
 }
 
 button {
   cursor: pointer;
 }
 
-.status-dot {
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: rgba(217, 45, 56, 0.45);
+  color: var(--pulse-text);
+}
+
+.pulse-shell-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.pulse-orb {
   position: relative;
-  display: inline-block;
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 999px;
-  background: #1d6b44;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.16), transparent 34%),
+    linear-gradient(145deg, #f44950, #9d1824);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 0 0 10px rgba(217, 45, 56, 0.12),
+    0 0 48px rgba(217, 45, 56, 0.62),
+    0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
-.status-dot::after {
+.pulse-orb::before {
   position: absolute;
-  inset: -0.35rem;
+  inset: -14px;
+  z-index: -1;
   content: "";
-  border: 1px solid rgba(29, 107, 68, 0.35);
-  border-radius: 999px;
-  animation: ping 1.6s ease-out infinite;
+  border: 1px solid rgba(255, 71, 82, 0.72);
+  border-radius: inherit;
+  animation: pulse-ring 2.4s ease-out infinite;
 }
 
-.wave-bar {
-  width: 0.25rem;
+.pulse-orb::after {
+  position: absolute;
+  inset: 15%;
+  content: "";
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: inherit;
+}
+
+.pulse-wave-bar {
+  width: 0.18rem;
   min-height: 0.45rem;
   border-radius: 999px;
-  background: #efb1bb;
-  animation: wave 900ms ease-in-out infinite;
+  background: linear-gradient(180deg, #ff737a, var(--pulse-red));
+  box-shadow: 0 0 16px rgba(217, 45, 56, 0.28);
+  animation: pulse-wave 950ms ease-in-out infinite;
 }
 
-.pulse-cursor {
-  display: inline-block;
-  width: 0.55rem;
-  height: 1.8rem;
-  margin-left: 0.2rem;
-  vertical-align: -0.2rem;
-  background: #efb1bb;
-  animation: blink 780ms step-end infinite;
+.pulse-route-map {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 68% 38%, rgba(53, 166, 106, 0.18), transparent 10rem),
+    radial-gradient(circle at 28% 72%, rgba(217, 45, 56, 0.14), transparent 12rem),
+    #0a141a;
+  background-size: 36px 36px, 36px 36px, auto, auto, auto;
 }
 
-.mic-dot {
-  position: relative;
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 999px;
-  background: #687672;
+.pulse-route-line {
+  background: linear-gradient(180deg, rgba(53, 166, 106, 0.95), rgba(217, 45, 56, 0.65));
+  filter: drop-shadow(0 0 12px rgba(53, 166, 106, 0.32));
 }
 
-.mic-dot-active {
-  background: #efb1bb;
-}
-
-.mic-dot-active::after {
-  position: absolute;
-  inset: -0.55rem;
-  content: "";
-  border: 2px solid rgba(239, 177, 187, 0.35);
-  border-radius: 999px;
-  animation: ping 1.2s ease-out infinite;
-}
-
-@keyframes wave {
+@keyframes pulse-wave {
   0%,
   100% {
-    height: 0.45rem;
+    height: 0.5rem;
     opacity: 0.45;
   }
 
   50% {
-    height: 1.85rem;
+    height: 2.6rem;
     opacity: 1;
   }
 }
 
-@keyframes blink {
-  0%,
-  45% {
-    opacity: 1;
-  }
-
-  46%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes ping {
+@keyframes pulse-ring {
   0% {
-    transform: scale(0.9);
-    opacity: 0.9;
+    opacity: 0.75;
+    transform: scale(0.94);
+  }
+
+  70% {
+    opacity: 0;
+    transform: scale(1.12);
   }
 
   100% {
-    transform: scale(1.8);
     opacity: 0;
+    transform: scale(1.12);
   }
 }
 
