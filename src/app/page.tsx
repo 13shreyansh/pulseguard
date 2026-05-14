@@ -44,11 +44,14 @@ type TriageResult = {
   warning: string;
   actions: string[];
   dispatchBrief: string;
+  source: "openai" | "local_fallback";
 };
 type DispatchCall = {
   callId?: string;
   status: "idle" | "starting" | "queued" | "ringing" | "in-progress" | "ended" | "failed";
   receivingPhone?: string;
+  callTarget?: "test_receiver";
+  selectedHospitalPhone?: string;
   hospitalName?: string;
   hospitalIndex?: number;
   transcript?: string;
@@ -59,6 +62,8 @@ type IncidentLocation = {
   label: string;
   latitude: number;
   longitude: number;
+  accuracy?: number;
+  source: "gps" | "fallback";
 };
 type HospitalCandidate = {
   id: string;
@@ -66,6 +71,7 @@ type HospitalCandidate = {
   address: string;
   phone?: string;
   distanceKm: number;
+  source: "google_places" | "fallback";
 };
 type SafetyScenario = {
   transcript: string;
@@ -91,19 +97,14 @@ type SafetyLabResult = {
 };
 
 const initialReport = "";
-const DEFAULT_INCIDENT_LOCATION: IncidentLocation = {
-  label: "Acacia College, NUS",
-  latitude: 1.3071479,
-  longitude: 103.7725891,
-};
 
 const dispatchSchedule = [
   { at: 1, label: "Bystander report captured" },
-  { at: 2, label: "Acacia location attached" },
+  { at: 2, label: "GPS location attached" },
   { at: 4, label: "Emergency classified" },
   { at: 6, label: "Nearby hospitals found" },
   { at: 8, label: "Hospitals sorted by distance" },
-  { at: 10, label: "Calling nearest hospital" },
+  { at: 10, label: "Calling configured test receiver" },
   { at: 12, label: "Call status monitored" },
   { at: 16, label: "Incident brief delivered by voice" },
   { at: 20, label: "Bystander guidance remains active" },
@@ -119,7 +120,7 @@ function formatTime(seconds: number) {
 
 function isRejectedCall(text: string) {
   const normalized = text.toLowerCase();
-  return /cannot receive|can't receive|cannot accept|can't accept|we cannot|unable to receive|unable to accept|not accepting|unavailable|full|try the next|call the next nearest hospital|next nearest hospital|no capacity|on divert/.test(
+  return /cannot receive|can't receive|cannot accept|can't accept|we cannot|unable to receive|unable to accept|not accepting|unavailable|full|try the next|next selected hospital|no capacity|on divert/.test(
     normalized,
   );
 }
@@ -130,6 +131,54 @@ function isAcceptedCall(text: string) {
   return /we can receive|can receive|we can accept|can accept|yes[,.\s]+send|send (the )?patient|receive (the )?patient|ambulance.*(send|coordinate|available)|can coordinate|will send|can send/.test(
     normalized,
   );
+}
+
+function formatCoordinates(location: IncidentLocation) {
+  return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`;
+}
+
+function describeLocationError(error: unknown) {
+  if (typeof error === "object" && error && "code" in error) {
+    const code = Number((error as { code?: number }).code);
+    if (code === 1) {
+      return "Location permission is required before Pulse can continue.";
+    }
+    if (code === 2) {
+      return "Your browser could not determine a GPS location. Check device location settings and try again.";
+    }
+    if (code === 3) {
+      return "GPS lookup timed out. Move near a window or enable precise location, then try again.";
+    }
+  }
+
+  return "Pulse needs a real GPS location before dispatch can start.";
+}
+
+function requestCurrentLocation() {
+  return new Promise<IncidentLocation>((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation is not supported in this browser."));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          label: "Current GPS location",
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          source: "gps",
+        });
+      },
+      reject,
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 12000,
+      },
+    );
+  });
 }
 
 function getCallOutcome(dispatchCall: DispatchCall) {
@@ -146,7 +195,7 @@ function getCallOutcome(dispatchCall: DispatchCall) {
   if (callText.trim() && isRejectedCall(callText)) {
     return {
       label: "Hospital unavailable",
-      detail: "Pulse will call the next nearest hospital automatically.",
+      detail: "Pulse will route the next selected hospital scenario to the configured test receiver.",
       tone: "danger" as const,
     };
   }
@@ -154,7 +203,7 @@ function getCallOutcome(dispatchCall: DispatchCall) {
   if (callText.trim() && isAcceptedCall(callText)) {
     return {
       label: "Receiving confirmed",
-      detail: "The hospital can receive the patient. Ambulance coordination has been requested.",
+      detail: "The test receiver confirmed the selected hospital can receive the patient.",
       tone: "success" as const,
     };
   }
@@ -169,8 +218,8 @@ function getCallOutcome(dispatchCall: DispatchCall) {
 
   if (["starting", "queued", "ringing", "in-progress"].includes(dispatchCall.status)) {
     return {
-      label: "Calling receiving desk",
-      detail: "Pulse is asking if they can receive the patient and send or coordinate an ambulance.",
+      label: "Calling configured test receiver",
+      detail: "Pulse is routing the selected hospital scenario to the configured test receiver.",
       tone: "warning" as const,
     };
   }
@@ -182,39 +231,68 @@ function getCallOutcome(dispatchCall: DispatchCall) {
   };
 }
 
-function fallbackHospitals(): HospitalCandidate[] {
-  return [
+function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: number) {
+  const earthKm = 6371;
+  const dLat = ((toLat - fromLat) * Math.PI) / 180;
+  const dLng = ((toLng - fromLng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((fromLat * Math.PI) / 180) *
+      Math.cos((toLat * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  return Math.round(earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
+}
+
+function fallbackHospitals(location: IncidentLocation): HospitalCandidate[] {
+  const fallbackLocations = [
     {
       id: "nuh",
       name: "National University Hospital",
       address: "5 Lower Kent Ridge Road, Singapore",
-      distanceKm: 1.4,
+      latitude: 1.2931,
+      longitude: 103.7846,
     },
     {
       id: "alexandra-hospital",
       name: "Alexandra Hospital",
       address: "378 Alexandra Road, Singapore",
-      distanceKm: 4.6,
+      latitude: 1.2862,
+      longitude: 103.8017,
     },
     {
       id: "ng-teng-fong",
       name: "Ng Teng Fong General Hospital",
       address: "1 Jurong East Street 21, Singapore",
-      distanceKm: 8.2,
+      latitude: 1.3331,
+      longitude: 103.7456,
     },
     {
       id: "gleneagles",
       name: "Gleneagles Hospital",
       address: "6A Napier Road, Singapore",
-      distanceKm: 8.9,
+      latitude: 1.3077,
+      longitude: 103.8206,
     },
     {
       id: "singapore-general",
       name: "Singapore General Hospital",
       address: "Outram Road, Singapore",
-      distanceKm: 10.4,
+      latitude: 1.2807,
+      longitude: 103.8346,
     },
   ];
+
+  return fallbackLocations
+    .map((hospital) => ({
+      id: hospital.id,
+      name: hospital.name,
+      address: hospital.address,
+      distanceKm: distanceKm(location.latitude, location.longitude, hospital.latitude, hospital.longitude),
+      source: "fallback" as const,
+    }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 5);
 }
 
 function analyzeReport(report: string): TriageResult {
@@ -245,6 +323,7 @@ function analyzeReport(report: string): TriageResult {
         : ["Keep the patient still", "Monitor breathing", "Keep them awake", "Clear space for responders"],
       dispatchBrief:
         "Critical medical emergency reported by bystander. Patient may have breathing, consciousness, or cardiac risk. Immediate emergency department coordination required.",
+      source: "local_fallback",
     };
   }
 
@@ -268,6 +347,7 @@ function analyzeReport(report: string): TriageResult {
     ],
     dispatchBrief:
       "Major trauma reported by bystander. Possible fracture, bleeding status requires attention, and patient movement must be controlled. Trauma-capable emergency care required.",
+    source: "local_fallback",
   };
 }
 
@@ -277,10 +357,11 @@ export default function Home() {
   const [submittedReport, setSubmittedReport] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
   const [dispatchCall, setDispatchCall] = useState<DispatchCall>({ status: "idle" });
-  const [incidentLocation, setIncidentLocation] = useState<IncidentLocation>(DEFAULT_INCIDENT_LOCATION);
+  const [incidentLocation, setIncidentLocation] = useState<IncidentLocation | null>(null);
   const [hospitals, setHospitals] = useState<HospitalCandidate[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [locationState, setLocationState] = useState<LocationState>("idle");
+  const [locationError, setLocationError] = useState("");
   const [speechState, setSpeechState] = useState<SpeechState>("idle");
   const [micState, setMicState] = useState<MicState>("idle");
   const [safetyLab, setSafetyLab] = useState<SafetyLabResult | null>(null);
@@ -346,7 +427,7 @@ export default function Home() {
     retriedCallRef.current = dispatchCall.callId;
     const nextIndex = (dispatchCall.hospitalIndex ?? 0) + 1;
     const nextHospital = hospitals[nextIndex];
-    if (!nextHospital || !submittedReport || !triageResult) return;
+    if (!nextHospital || !submittedReport || !triageResult || !incidentLocation) return;
 
     startDispatchCall(submittedReport, triageResult, nextHospital, incidentLocation, nextIndex);
   }, [dispatchCall, hospitals, incidentLocation, submittedReport, triageResult]);
@@ -395,13 +476,34 @@ export default function Home() {
     };
   }, []);
 
-  function startPulse() {
-    setPhase("intake");
+  async function startPulse() {
+    if (locationState === "locking") return;
+
     setElapsed(0);
     setReport("");
     setSubmittedReport("");
+    setTriageResult(null);
+    setDispatchCall({ status: "idle" });
+    setHospitals([]);
+    setSafetyLab(null);
+    safetyLabStartedRef.current = false;
+    retriedCallRef.current = null;
     committedSpeechRef.current = "";
-    setLocationState("locked");
+    setLocationError("");
+    setIncidentLocation(null);
+    setLocationState("locking");
+
+    try {
+      const location = await requestCurrentLocation();
+      setIncidentLocation(location);
+      setLocationState("locked");
+      setPhase("intake");
+    } catch (error) {
+      setLocationState("unavailable");
+      setLocationError(describeLocationError(error));
+      return;
+    }
+
     startSpeechCapture();
   }
 
@@ -436,38 +538,64 @@ export default function Home() {
       setTriageResult(resolvedTriage);
     }
 
-    setPhase("responding");
-    const hospitalSearch = await loadNearbyHospitals();
-    startDispatchCall(
-      cleaned,
-      resolvedTriage,
-      hospitalSearch.hospitals[0],
-      hospitalSearch.incidentLocation,
-      0,
-    );
+    try {
+      const hospitalSearch = await loadNearbyHospitals();
+      const selectedHospital = hospitalSearch.hospitals[0];
+      if (!selectedHospital) {
+        throw new Error("No hospital candidates were available.");
+      }
+      setPhase("responding");
+      startDispatchCall(
+        cleaned,
+        resolvedTriage,
+        selectedHospital,
+        hospitalSearch.incidentLocation,
+        0,
+      );
+    } catch (error) {
+      setSpeechState("idle");
+      setDispatchCall({
+        status: "failed",
+        error: error instanceof Error ? error.message : "Hospital search failed",
+      });
+    }
   }
 
   async function loadNearbyHospitals() {
+    if (!incidentLocation) {
+      throw new Error("GPS location is required before hospital search.");
+    }
+
+    const params = new URLSearchParams({
+      lat: String(incidentLocation.latitude),
+      lng: String(incidentLocation.longitude),
+    });
+
     try {
-      const response = await fetch("/api/hospitals");
+      const response = await fetch(`/api/hospitals?${params.toString()}`);
       if (!response.ok) throw new Error("Hospital search failed");
       const data = (await response.json()) as {
         incidentLocation: IncidentLocation;
         hospitals: HospitalCandidate[];
+        source?: "google_places" | "fallback";
       };
-      const resolvedHospitals = data.hospitals.length > 0 ? data.hospitals : fallbackHospitals();
-      setIncidentLocation(data.incidentLocation || DEFAULT_INCIDENT_LOCATION);
+      const resolvedLocation = {
+        ...incidentLocation,
+        ...data.incidentLocation,
+        accuracy: incidentLocation.accuracy,
+      };
+      const resolvedHospitals = data.hospitals.length > 0 ? data.hospitals : fallbackHospitals(resolvedLocation);
+      setIncidentLocation(resolvedLocation);
       setHospitals(resolvedHospitals);
       return {
-        incidentLocation: data.incidentLocation || DEFAULT_INCIDENT_LOCATION,
+        incidentLocation: resolvedLocation,
         hospitals: resolvedHospitals,
       };
     } catch {
-      const resolvedHospitals = fallbackHospitals();
-      setIncidentLocation(DEFAULT_INCIDENT_LOCATION);
+      const resolvedHospitals = fallbackHospitals(incidentLocation);
       setHospitals(resolvedHospitals);
       return {
-        incidentLocation: DEFAULT_INCIDENT_LOCATION,
+        incidentLocation,
         hospitals: resolvedHospitals,
       };
     }
@@ -507,12 +635,16 @@ export default function Home() {
         callId?: string;
         status?: DispatchCall["status"];
         receivingPhone?: string;
+        callTarget?: "test_receiver";
+        selectedHospitalPhone?: string;
       };
       setDispatchCall({
         callId: data.callId,
         hospitalName: hospital.name,
         hospitalIndex,
         receivingPhone: data.receivingPhone,
+        callTarget: data.callTarget,
+        selectedHospitalPhone: data.selectedHospitalPhone,
         status: data.status || "queued",
       });
     } catch (error) {
@@ -634,7 +766,7 @@ export default function Home() {
     setSubmittedReport("");
     setTriageResult(null);
     setDispatchCall({ status: "idle" });
-    setIncidentLocation(DEFAULT_INCIDENT_LOCATION);
+    setIncidentLocation(null);
     setHospitals([]);
     retriedCallRef.current = null;
     setSpeechState("idle");
@@ -643,6 +775,7 @@ export default function Home() {
     safetyLabStartedRef.current = false;
     setElapsed(0);
     setLocationState("idle");
+    setLocationError("");
   }
 
   return (
@@ -670,10 +803,17 @@ export default function Home() {
           )}
         </header>
 
-        {phase === "standby" && <StartPanel onStart={startPulse} />}
+        {phase === "standby" && (
+          <StartPanel
+            locationError={locationError}
+            locationState={locationState}
+            onStart={startPulse}
+          />
+        )}
 
         {phase === "intake" && (
           <IntakePanel
+            incidentLocation={incidentLocation}
             locationState={locationState}
             micState={micState}
             onProcess={() => submitCapturedReport()}
@@ -685,7 +825,7 @@ export default function Home() {
           />
         )}
 
-        {phase === "responding" && (
+        {phase === "responding" && incidentLocation && (
           <ResponsePanel
             elapsed={elapsed}
             events={visibleEvents}
@@ -704,7 +844,17 @@ export default function Home() {
   );
 }
 
-function StartPanel({ onStart }: { onStart: () => void }) {
+function StartPanel({
+  locationError,
+  locationState,
+  onStart,
+}: {
+  locationError: string;
+  locationState: LocationState;
+  onStart: () => void;
+}) {
+  const isLocating = locationState === "locking";
+
   return (
     <div className="grid flex-1 gap-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(390px,0.7fr)]">
       <section className="flex min-h-[72vh] flex-col justify-between rounded-xl border border-[#d9e1dd] bg-white p-5 shadow-sm">
@@ -716,15 +866,24 @@ function StartPanel({ onStart }: { onStart: () => void }) {
             One tap. One report. Dispatch starts.
           </h1>
           <p className="mt-6 max-w-2xl text-xl font-semibold leading-8 text-[#4f5d59]">
-            Pulse captures what happened, attaches the Acacia College location, structures the emergency, guides the bystander, and contacts the receiving facility automatically.
+            Pulse captures what happened, locks the current GPS location, structures the emergency, guides the bystander, and routes the selected hospital scenario to the configured test receiver.
           </p>
+          {locationError && (
+            <div className="mt-6 rounded-lg border border-[#f0c5c5] bg-[#fff5f4] p-4">
+              <p className="text-sm font-black uppercase tracking-[0.14em] text-[#b11226]">
+                Location required
+              </p>
+              <p className="mt-2 text-sm font-bold leading-6 text-[#5f574f]">{locationError}</p>
+            </div>
+          )}
         </div>
 
         <button
           onClick={onStart}
+          disabled={isLocating}
           className="mt-10 flex min-h-32 w-full items-center justify-center rounded-lg bg-[#b11226] px-6 text-4xl font-black text-white transition hover:bg-[#8f0e1f] focus:outline-none focus:ring-4 focus:ring-[#e6a3ad]"
         >
-          Start Pulse
+          {isLocating ? "Locking GPS..." : "Start Pulse"}
         </button>
       </section>
 
@@ -735,11 +894,11 @@ function StartPanel({ onStart }: { onStart: () => void }) {
         <div className="mt-5 grid gap-2">
           {[
             "Listen to the witness",
-            "Use Acacia College incident location",
+            "Attach current GPS location",
             "Classify trauma and risk",
             "Show safe bystander actions",
             "Rank nearby hospitals",
-            "Call the receiving desk",
+            "Call configured test receiver",
             "Ask for patient intake and ambulance coordination",
           ].map((item, index) => (
             <div key={item} className="flex items-center gap-3 rounded-lg border border-[#d9e1dd] bg-[#f7faf8] px-4 py-3">
@@ -756,6 +915,7 @@ function StartPanel({ onStart }: { onStart: () => void }) {
 }
 
 function IntakePanel({
+  incidentLocation,
   locationState,
   micState,
   onProcess,
@@ -765,6 +925,7 @@ function IntakePanel({
   setReport,
   speechState,
 }: {
+  incidentLocation: IncidentLocation | null;
   locationState: LocationState;
   micState: MicState;
   onProcess: () => void;
@@ -800,7 +961,7 @@ function IntakePanel({
             </p>
             <h1 className="mt-2 text-4xl font-black sm:text-5xl">Speak. Pulse is listening.</h1>
           </div>
-          <LocationBadge locationLabel={DEFAULT_INCIDENT_LOCATION.label} state={locationState} />
+          <LocationBadge location={incidentLocation} state={locationState} />
         </div>
 
         <div className="mt-6 rounded-xl border border-[#17231f] bg-[#101817] p-5 text-white">
@@ -878,7 +1039,7 @@ function IntakePanel({
           <StatusRow active label="Emergency session active" />
           <StatusRow active={micState === "granted"} label="Microphone permission granted" />
           <StatusRow active={speechState === "listening"} label="Speech recognition active" />
-          <StatusRow active={locationState === "locked"} label="Incident location ready" />
+          <StatusRow active={locationState === "locked"} label="GPS location ready" />
           <StatusRow active={report.trim().length >= 12} label="Report ready" />
         </div>
       </section>
@@ -929,7 +1090,7 @@ function ResponsePanel({
               </p>
               <p className="mt-2 text-lg font-semibold leading-7">{report}</p>
             </div>
-            <LocationBadge locationLabel={incidentLocation.label} state={locationState} />
+            <LocationBadge location={incidentLocation} state={locationState} />
           </div>
         </div>
 
@@ -939,6 +1100,15 @@ function ResponsePanel({
               Triage
             </p>
             <h2 className="mt-2 text-3xl font-black leading-tight text-[#b11226]">{triage.title}</h2>
+            <p
+              className={`mt-3 w-fit rounded-md px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] ${
+                triage.source === "local_fallback"
+                  ? "bg-[#fff8e8] text-[#7a5200]"
+                  : "bg-[#edf8f1] text-[#1d6b44]"
+              }`}
+            >
+              {triage.source === "local_fallback" ? "Local fallback triage" : "OpenAI triage"}
+            </p>
             <p className="mt-3 rounded-md border border-[#d9e1dd] bg-[#f7faf8] px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#4f5d59]">
               {triage.hospitalType}
             </p>
@@ -972,7 +1142,7 @@ function ResponsePanel({
                 <h2 className="mt-1 text-3xl font-black text-[#2f7a52]">Response package delivered</h2>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {["Hospital contacted", "Incident brief delivered", "Bystander guidance active", "Ambulance coordination requested"].map((item) => (
+                {["Test receiver contacted", "Incident brief delivered", "Bystander guidance active", "Ambulance coordination requested"].map((item) => (
                   <div key={item} className="rounded-md border border-[#b9ddc8] bg-white px-3 py-2 text-sm font-bold">
                     {item}
                   </div>
@@ -1176,14 +1346,19 @@ function HospitalPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#687672]">
-            Hospital Call
+            Test Dispatch Call
           </p>
           <h3 className="mt-2 text-2xl font-black leading-tight">
             {dispatchCall.hospitalName || hospitals[0]?.name || "Selecting hospital"}
           </h3>
           {dispatchCall.receivingPhone && (
             <p className="mt-1 font-mono text-xs font-bold text-[#687672]">
-              {dispatchCall.receivingPhone}
+              Test receiver: {dispatchCall.receivingPhone}
+            </p>
+          )}
+          {dispatchCall.selectedHospitalPhone && (
+            <p className="mt-1 font-mono text-xs font-bold text-[#687672]">
+              Listed hospital phone: {dispatchCall.selectedHospitalPhone}
             </p>
           )}
         </div>
@@ -1225,8 +1400,19 @@ function HospitalPanel({
                     : "border-[#d9e1dd] bg-white text-[#4f5d59]"
                 }`}
               >
-                <span className="min-w-0 truncate">{index + 1}. {hospital.name}</span>
-                <span className="shrink-0 font-mono text-xs">{hospital.distanceKm} km</span>
+                  <span className="min-w-0 truncate">{index + 1}. {hospital.name}</span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${
+                      hospital.source === "fallback"
+                        ? "bg-[#fff8e8] text-[#7a5200]"
+                        : "bg-[#edf8f1] text-[#1d6b44]"
+                    }`}
+                  >
+                    {hospital.source === "fallback" ? "Fallback" : "Google"}
+                  </span>
+                  <span className="font-mono text-xs">{hospital.distanceKm} km</span>
+                </span>
               </div>
             ))}
           </div>
@@ -1258,20 +1444,31 @@ function HospitalPanel({
   );
 }
 
-function LocationBadge({
-  locationLabel,
-  state,
-}: {
-  locationLabel?: string;
-  state: LocationState;
-}) {
-  const statusLabel = state === "unavailable" ? "Incident location" : "Incident location";
+function LocationBadge({ location, state }: { location: IncidentLocation | null; state: LocationState }) {
+  const statusLabel =
+    state === "locking"
+      ? "Locating"
+      : state === "locked"
+        ? "GPS location"
+        : state === "unavailable"
+          ? "Location required"
+          : "Location pending";
+  const detail =
+    state === "locked" && location
+      ? `${location.label} · ${formatCoordinates(location)}${
+          location.accuracy != null ? ` · ±${Math.round(location.accuracy)}m` : ""
+        }`
+      : state === "locking"
+        ? "Requesting browser GPS"
+        : state === "unavailable"
+          ? "Allow location access to continue"
+          : "Waiting for GPS lock";
 
   return (
     <div className="rounded-lg border border-[#d9e1dd] bg-[#f7faf8] px-3 py-2 text-right">
       <p className="text-xs font-black uppercase tracking-[0.14em] text-[#687672]">{statusLabel}</p>
       <p className="mt-1 max-w-64 text-sm font-bold text-[#17130f]">
-        {locationLabel || "Acacia College, NUS"}
+        {detail}
       </p>
     </div>
   );

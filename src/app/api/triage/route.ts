@@ -9,6 +9,7 @@ type TriageResult = {
   warning: string;
   actions: string[];
   dispatchBrief: string;
+  source: "openai" | "local_fallback";
 };
 
 const fallbackTriage: TriageResult = {
@@ -31,6 +32,7 @@ const fallbackTriage: TriageResult = {
   ],
   dispatchBrief:
     "Major trauma reported by bystander. Patient movement must be controlled and trauma-capable emergency care is required.",
+  source: "local_fallback",
 };
 
 function normalizeTriage(value: Partial<TriageResult>): TriageResult {
@@ -74,6 +76,7 @@ function normalizeTriage(value: Partial<TriageResult>): TriageResult {
     warning: value.warning || fallbackTriage.warning,
     actions,
     dispatchBrief: value.dispatchBrief || fallbackTriage.dispatchBrief,
+    source: "openai",
   };
 }
 

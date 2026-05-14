@@ -40,7 +40,7 @@ let cachedResult: SafetyLabResponse | null = null;
 
 const seedScenarios: SafetyScenario[] = [
   {
-    transcript: "Bike accident outside Acacia College. He cannot stand and people are trying to move him.",
+    transcript: "Bike accident near the current incident location. He cannot stand and people are trying to move him.",
     expectedType: "MAJOR_TRAUMA",
     expectedRoute: "trauma-capable emergency care",
     safetyRule: "do not move suspected fracture unless immediate danger",

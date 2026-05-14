@@ -1,84 +1,96 @@
-# Pulse
+# Pulse Emergency
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.2.4-61DAFB?style=for-the-badge&logo=react&logoColor=111)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=111)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?style=for-the-badge&logo=vercel)](https://vercel.com/)
 
-Pulse is a hackathon prototype for autonomous emergency dispatch in the first critical minute.
-
-It captures a bystander report, classifies the emergency, anchors the incident to Acacia College at NUS, ranks nearby hospitals, places an outbound Vapi call to a configured receiving desk, tracks the call result, and starts a lightweight Adaption Labs safety-eval workflow in the background.
+Pulse is a real-time emergency dispatch prototype for the first critical minute after an incident. It captures a bystander report, requires the browser's live GPS position, classifies the emergency, finds nearby hospitals from Google Places, and routes a Vapi test-mode call to a configured receiver with the selected hospital context.
 
 Live app: [https://pulse-beta-two.vercel.app](https://pulse-beta-two.vercel.app)
 
 ## What It Does
 
-Pulse turns a bystander report into a dispatch workflow:
-
 1. The bystander presses `Start Pulse`.
-2. The browser listens with Web Speech API speech recognition.
-3. The transcript is reviewed or edited in the intake box.
-4. Pulse sends the transcript to the triage API.
-5. OpenAI returns structured emergency classification, safety warnings, and bystander actions.
-6. Google Places searches for hospitals near the hard-coded Acacia College, NUS incident location.
-7. Pulse ranks hospitals by distance and starts an outbound Vapi call to the configured receiving phone number.
-8. The Vapi assistant asks whether the receiving desk can accept the patient and coordinate ambulance support.
+2. Pulse requests browser GPS with high accuracy enabled.
+3. If location permission is denied or times out, the intake flow stays blocked with a clear location-required message.
+4. The browser listens with Web Speech API speech recognition, with an editable transcript fallback.
+5. The transcript is sent to the triage API for structured emergency classification and bystander guidance.
+6. `/api/hospitals` searches Google Places around the actual GPS coordinates and ranks hospitals by computed distance.
+7. Pulse selects a hospital candidate and calls `PULSE_RECEIVING_PHONE`, the configured test receiver.
+8. The Vapi assistant clearly states that the call is a test-mode call for the selected hospital scenario.
 9. Pulse polls Vapi for call status, transcript, summary, and acceptance or rejection language.
-10. If the call result suggests rejection, the client attempts the next ranked hospital.
-11. Adaption Labs receives a small seed dataset of emergency safety scenarios when configured, otherwise Pulse shows a local fallback safety-lab result.
+10. If the receiver rejects the scenario, Pulse attempts the next selected hospital candidate.
+11. The safety-lab route syncs an emergency evaluation dataset to Adaption Labs when configured, or returns a visible local result.
 
 ## Current Stack
 
-### Application
-
-- **Framework:** Next.js 16 App Router
-- **Runtime:** React 19, TypeScript, Node.js
-- **Styling:** Tailwind CSS v4 through `@tailwindcss/postcss`
+- **Framework:** Next.js App Router
+- **UI:** React 19, TypeScript, Tailwind CSS v4
+- **Speech:** Browser Web Speech API / `webkitSpeechRecognition`
+- **Location:** Browser `navigator.geolocation`
+- **Triage:** OpenAI API, with explicit local fallback
+- **Hospital Search:** Google Places Nearby Search, with explicit fallback data
+- **Dispatch Calls:** Vapi outbound call API, routed to `PULSE_RECEIVING_PHONE`
+- **Safety Evaluation:** Adaption Labs API, with explicit local fallback
 - **Deployment:** Vercel
-- **State:** React hooks in a single client flow
 
-### Browser Capabilities
-
-- Web Speech API / `webkitSpeechRecognition` for live speech-to-text
-- Editable transcript fallback when microphone or speech recognition is unavailable
-- Client-side timer, dispatch event timeline, hospital call panel, and safety-lab status panel
-
-### Server Routes
+## API Surface
 
 | Route | Purpose |
 | --- | --- |
-| `POST /api/triage` | Uses OpenAI to classify the incident and return structured emergency guidance. |
-| `GET /api/hospitals` | Uses Google Places to find hospitals near Acacia College, NUS, with a fixed fallback list. |
-| `POST /api/dispatch/call` | Starts an outbound Vapi call to the configured receiving phone number. |
+| `POST /api/triage` | Classifies the incident with OpenAI and returns structured emergency guidance. Fallback triage is marked `local_fallback`. |
+| `GET /api/hospitals?lat={lat}&lng={lng}` | Searches Google Places near the provided GPS coordinates. Missing or invalid coordinates return `400`. |
+| `POST /api/dispatch/call` | Starts a Vapi call to the configured test receiver, not directly to the hospital phone number. |
 | `GET /api/dispatch/status` | Polls Vapi for call status, transcript, summary, and end reason. |
 | `POST /api/adaption/safety-lab` | Uploads or simulates an emergency safety-eval dataset through Adaption Labs. |
 
-## Demo Assumptions
+### Hospital Search Contract
 
-This version is intentionally demo-focused.
+`GET /api/hospitals` requires:
 
-- The incident location is hard-coded to **Acacia College, NUS**.
-- The outbound call goes to `PULSE_RECEIVING_PHONE`, not directly to each hospital's listed phone number.
-- Hospitals are discovered through Google Places when configured, with a baked-in Singapore fallback list.
-- Safety scenarios for Adaption Labs are seed examples in the codebase.
-- This is not an emergency service and must not be used as medical, clinical, or official dispatch guidance.
+- `lat`: incident latitude
+- `lng`: incident longitude
 
-## Repository Structure
+Optional:
 
-```text
-.
-├── src/app/page.tsx                         # Main Pulse client experience
-├── src/app/globals.css                      # Tailwind v4 and global animation styles
-├── src/app/layout.tsx                       # App metadata and shell
-├── src/app/api/triage/route.ts              # OpenAI triage endpoint
-├── src/app/api/hospitals/route.ts           # Google Places hospital ranking endpoint
-├── src/app/api/dispatch/call/route.ts       # Vapi outbound call endpoint
-├── src/app/api/dispatch/status/route.ts     # Vapi call polling endpoint
-├── src/app/api/adaption/safety-lab/route.ts # Adaption Labs seed dataset endpoint
-├── public/                                  # Default static assets
-├── package.json
-└── README.md
+- `radiusMeters`: search radius, default `15000`
+
+Response shape:
+
+```ts
+{
+  incidentLocation: {
+    label: "Current GPS location";
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+  hospitals: Array<{
+    id: string;
+    name: string;
+    address: string;
+    phone?: string;
+    distanceKm: number;
+    source: "google_places" | "fallback";
+  }>;
+  source: "google_places" | "fallback";
+  warning?: string;
+}
 ```
+
+## Real Data And Fallbacks
+
+Pulse now separates live data from fallback data instead of presenting demo data as real:
+
+- GPS is required before intake starts.
+- Hospital search uses the user's real GPS coordinates.
+- Hospital distances are computed from the current GPS location.
+- Google Places results are marked `google_places`.
+- Hospital fallback results are marked `fallback` and shown with a visible fallback badge.
+- Triage fallback results are marked `local_fallback`.
+- Safety-lab local results are marked `local`.
+- Dispatch still calls the configured test receiver. Real hospital phone calls are intentionally out of scope until the call target is changed.
 
 ## Environment
 
@@ -110,23 +122,29 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-For a production build:
+For a production check:
 
 ```bash
 npm run lint
 npm run build
-npm run start
 ```
 
-## How The Flow Fails Safely
+## Repository Structure
 
-Pulse has several fallback paths for demo reliability:
-
-- If speech recognition is unavailable, the transcript box remains editable.
-- If OpenAI triage fails, the client can still use local trauma-analysis logic.
-- If Google Places is unavailable, the app falls back to a fixed list of nearby Singapore hospitals.
-- If Adaption Labs is not configured, the safety-lab panel returns local seed scenarios instead of blocking dispatch.
-- If Vapi is not configured, dispatch call creation returns a clear server error.
+```text
+.
+├── src/app/page.tsx                         # Main Pulse client experience
+├── src/app/globals.css                      # Tailwind v4 and global styles
+├── src/app/layout.tsx                       # App metadata and shell
+├── src/app/api/triage/route.ts              # OpenAI triage endpoint
+├── src/app/api/hospitals/route.ts           # GPS-based Google Places hospital endpoint
+├── src/app/api/dispatch/call/route.ts       # Vapi test receiver call endpoint
+├── src/app/api/dispatch/status/route.ts     # Vapi call polling endpoint
+├── src/app/api/adaption/safety-lab/route.ts # Adaption Labs safety dataset endpoint
+├── public/
+├── package.json
+└── README.md
+```
 
 ## Safety Notice
 

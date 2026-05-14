@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 type GooglePlace = {
   id?: string;
@@ -13,43 +13,44 @@ type HospitalResult = {
   address: string;
   phone?: string;
   distanceKm: number;
+  source: "google_places" | "fallback";
 };
 
-const UTOWN_LOCATION = {
-  label: "Acacia College, NUS",
-  latitude: 1.3071479,
-  longitude: 103.7725891,
-};
-const FALLBACK_HOSPITALS: HospitalResult[] = [
+const FALLBACK_HOSPITALS = [
   {
     id: "nuh",
     name: "National University Hospital",
     address: "5 Lower Kent Ridge Road, Singapore",
-    distanceKm: 1.8,
+    latitude: 1.2931,
+    longitude: 103.7846,
   },
   {
     id: "alexandra-hospital",
     name: "Alexandra Hospital",
     address: "378 Alexandra Road, Singapore",
-    distanceKm: 4.6,
+    latitude: 1.2862,
+    longitude: 103.8017,
   },
   {
     id: "ng-teng-fong",
     name: "Ng Teng Fong General Hospital",
     address: "1 Jurong East Street 21, Singapore",
-    distanceKm: 4.3,
+    latitude: 1.3331,
+    longitude: 103.7456,
   },
   {
     id: "gleneagles",
     name: "Gleneagles Hospital",
     address: "6A Napier Road, Singapore",
-    distanceKm: 5.2,
+    latitude: 1.3077,
+    longitude: 103.8206,
   },
   {
     id: "singapore-general",
     name: "Singapore General Hospital",
     address: "Outram Road, Singapore",
-    distanceKm: 9.2,
+    latitude: 1.2807,
+    longitude: 103.8346,
   },
 ];
 
@@ -66,70 +67,138 @@ function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: numb
   return Math.round(earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
 }
 
-export async function GET() {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json({ error: "Google Maps API key is not configured" }, { status: 500 });
+function parseCoordinate(value: string | null, min: number, max: number) {
+  if (!value) return null;
+  const coordinate = Number(value);
+  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) {
+    return null;
   }
+  return coordinate;
+}
 
-  const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.location,places.nationalPhoneNumber",
+function parseRadius(value: string | null) {
+  if (!value) return 15000;
+  const radius = Number(value);
+  if (!Number.isFinite(radius)) return 15000;
+  return Math.min(Math.max(Math.round(radius), 1000), 50000);
+}
+
+function fallbackHospitals(latitude: number, longitude: number): HospitalResult[] {
+  return FALLBACK_HOSPITALS.map((hospital) => ({
+    id: hospital.id,
+    name: hospital.name,
+    address: hospital.address,
+    distanceKm: distanceKm(latitude, longitude, hospital.latitude, hospital.longitude),
+    source: "fallback" as const,
+  }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 5);
+}
+
+function fallbackResponse(latitude: number, longitude: number, reason: string) {
+  return NextResponse.json({
+    incidentLocation: {
+      label: "Current GPS location",
+      latitude,
+      longitude,
+      source: "gps",
     },
-    body: JSON.stringify({
-      includedTypes: ["hospital"],
-      maxResultCount: 10,
-      locationRestriction: {
-        circle: {
-          center: {
-            latitude: UTOWN_LOCATION.latitude,
-            longitude: UTOWN_LOCATION.longitude,
-          },
-          radius: 15000,
-        },
-      },
-    }),
+    hospitals: fallbackHospitals(latitude, longitude),
+    source: "fallback",
+    warning: reason,
   });
+}
 
-  if (!response.ok) {
-    const errorText = await response.text();
+export async function GET(request: NextRequest) {
+  const latitude = parseCoordinate(request.nextUrl.searchParams.get("lat"), -90, 90);
+  const longitude = parseCoordinate(request.nextUrl.searchParams.get("lng"), -180, 180);
+  const radiusMeters = parseRadius(request.nextUrl.searchParams.get("radiusMeters"));
+
+  if (latitude == null || longitude == null) {
     return NextResponse.json(
-      { error: "Hospital search failed", details: errorText.slice(0, 300) },
-      { status: 502 },
+      { error: "lat and lng query params are required" },
+      { status: 400 },
     );
   }
 
-  const data = (await response.json()) as { places?: GooglePlace[] };
-  const apiHospitals = (data.places || [])
-    .map((place) => {
-      const latitude = place.location?.latitude || UTOWN_LOCATION.latitude;
-      const longitude = place.location?.longitude || UTOWN_LOCATION.longitude;
-      return {
-        id: place.id || place.displayName?.text || "hospital",
-        name: place.displayName?.text || "Nearby hospital",
-        address: place.formattedAddress || "Address unavailable",
-        phone: place.nationalPhoneNumber,
-        distanceKm: distanceKm(UTOWN_LOCATION.latitude, UTOWN_LOCATION.longitude, latitude, longitude),
-      };
-    })
-    .filter((hospital) => !/lobby|drop off|car park|zone|clinic/i.test(hospital.name))
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 5);
-  const seen = new Set(apiHospitals.map((hospital) => hospital.name.toLowerCase()));
-  const hospitals = [
-    ...apiHospitals,
-    ...FALLBACK_HOSPITALS.filter((hospital) => !seen.has(hospital.name.toLowerCase())),
-  ]
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 5);
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
 
-  return NextResponse.json({
-    incidentLocation: UTOWN_LOCATION,
-    hospitals,
-  });
+  if (!apiKey) {
+    return fallbackResponse(latitude, longitude, "Google Maps API key is not configured; showing labeled fallback hospitals.");
+  }
+
+  try {
+    const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "places.id,places.displayName,places.formattedAddress,places.location,places.nationalPhoneNumber",
+      },
+      body: JSON.stringify({
+        includedTypes: ["hospital"],
+        maxResultCount: 10,
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude,
+              longitude,
+            },
+            radius: radiusMeters,
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return fallbackResponse(
+        latitude,
+        longitude,
+        `Google Places search failed; showing labeled fallback hospitals. ${errorText.slice(0, 160)}`,
+      );
+    }
+
+    const data = (await response.json()) as { places?: GooglePlace[] };
+    const hospitals = (data.places || [])
+      .map<HospitalResult | null>((place) => {
+        const hospitalLatitude = place.location?.latitude;
+        const hospitalLongitude = place.location?.longitude;
+        if (hospitalLatitude == null || hospitalLongitude == null) return null;
+
+        const hospital: HospitalResult = {
+          id: place.id || place.displayName?.text || "hospital",
+          name: place.displayName?.text || "Nearby hospital",
+          address: place.formattedAddress || "Address unavailable",
+          distanceKm: distanceKm(latitude, longitude, hospitalLatitude, hospitalLongitude),
+          source: "google_places" as const,
+        };
+        if (place.nationalPhoneNumber) {
+          hospital.phone = place.nationalPhoneNumber;
+        }
+        return hospital;
+      })
+      .filter((hospital): hospital is HospitalResult => Boolean(hospital))
+      .filter((hospital) => !/lobby|drop off|car park|zone|clinic/i.test(hospital.name))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 5);
+
+    if (hospitals.length === 0) {
+      return fallbackResponse(latitude, longitude, "Google Places returned no hospitals; showing labeled fallback hospitals.");
+    }
+
+    return NextResponse.json({
+      incidentLocation: {
+        label: "Current GPS location",
+        latitude,
+        longitude,
+        source: "gps",
+      },
+      hospitals,
+      source: "google_places",
+    });
+  } catch {
+    return fallbackResponse(latitude, longitude, "Google Places search could not be completed; showing labeled fallback hospitals.");
+  }
 }
