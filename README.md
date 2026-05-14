@@ -1,17 +1,19 @@
-# PulseGuard
+# Pulse
 
 Autonomous emergency dispatch for the first critical minute.
 
-PulseGuard captures a bystander voice report, performs emergency triage, finds nearby hospitals around Acacia College, NUS, places an outbound Vapi call, asks whether the facility can receive the patient and coordinate an ambulance, and starts an Adaption Labs safety-eval run in the background.
+Pulse captures a bystander voice report, performs emergency triage, finds nearby hospitals around Acacia College, NUS, places an outbound Vapi call, asks whether the facility can receive the patient and coordinate an ambulance, and starts an Adaption Labs safety-eval run in the background.
 
 ## Getting Started
+
+Install dependencies and run the development server:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 ## Required Environment
 
@@ -39,4 +41,11 @@ ADAPTION_LABS_API_KEY=
 
 ## Safety Note
 
-PulseGuard is a hackathon prototype and does not replace official emergency services or clinical guidance.
+Pulse is a hackathon prototype and does not replace official emergency services or clinical guidance.
+
+## Scripts
+
+```bash
+npm run lint
+npm run build
+```
