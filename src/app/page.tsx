@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   AlertTriangle,
+  Ambulance,
   CheckCircle2,
-  CircleDot,
-  Clock3,
   Crosshair,
+  Eye,
   FileText,
-  Headphones,
-  Home as HomeIcon,
+  Hand,
+  HeartPulse,
   Hospital,
+  Image as ImageIcon,
   ListChecks,
   Loader2,
   Lock,
@@ -22,46 +22,24 @@ import {
   PhoneCall,
   Radio,
   RefreshCw,
-  Route,
   Send,
   ShieldCheck,
   Siren,
-  Stethoscope,
 } from "lucide-react";
 
-type WorkflowStep = "start" | "location" | "listen" | "triage" | "hospitals" | "dispatch";
+type AppStep = "start" | "listen" | "confirm" | "sending" | "done";
 type LocationState = "idle" | "locking" | "locked" | "unavailable";
-type SpeechState = "idle" | "listening" | "processing" | "unsupported" | "error";
+type SpeechState = "idle" | "connecting" | "listening" | "processing" | "unsupported" | "error";
 type MicState = "idle" | "requesting" | "granted" | "denied" | "unavailable";
-type SpeechEventLike = {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: {
-      isFinal: boolean;
-      [index: number]: {
-        transcript: string;
-      };
-    };
-  };
+type SendPhase = "idle" | "sharing_location" | "preparing_brief" | "finding_care" | "sending_brief" | "calling_help" | "done" | "failed";
+
+type RealtimeTranscriptEvent = {
+  type?: string;
+  item_id?: string;
+  delta?: string;
+  transcript?: string;
 };
-type BrowserSpeechRecognition = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: SpeechEventLike) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-};
-type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
-type SpeechWindow = Window &
-  typeof globalThis & {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  };
+
 type TriageResult = {
   title: string;
   emergencyType: string;
@@ -70,139 +48,188 @@ type TriageResult = {
   signals: string[];
   warning: string;
   actions: string[];
+  situationSummary: string;
+  doNow: string[];
+  doNotDo: string[];
+  watchFor: string[];
+  infographicBrief: string;
   dispatchBrief: string;
   source: "openai" | "local_fallback";
 };
+
+type InfographicResult = {
+  status: "idle" | "loading" | "generated" | "fallback";
+  imageDataUrl?: string;
+  altText: string;
+  caption: string;
+  source?: "openai" | "fallback";
+};
+
+type CoordinationHandoffStatus =
+  | "preparing"
+  | "brief_sent"
+  | "calling"
+  | "connected"
+  | "accepted"
+  | "not_confirmed"
+  | "failed";
+
+type FacilityQuestion = {
+  id: string;
+  label: string;
+  required: boolean;
+};
+
+type FacilityResponse = {
+  questionId: string;
+  status: "pending" | "yes" | "no" | "unknown";
+  evidence?: string;
+};
+
+type ContactTarget = {
+  id: string;
+  type: "hospital_candidate" | "emergency_services" | "family_contact";
+  name: string;
+  phone?: string;
+  status: "selected" | "queued" | "manual_required" | "future_integration";
+  note: string;
+};
+
+type CoordinationTimelineItem = {
+  id: string;
+  label: string;
+  detail: string;
+  state: "done" | "active" | "attention" | "pending";
+};
+
 type DispatchCall = {
   callId?: string;
   status: "idle" | "starting" | "queued" | "ringing" | "in-progress" | "ended" | "failed";
+  attempt?: number;
+  verificationOnly?: boolean;
   receivingPhone?: string;
-  callTarget?: "test_receiver";
+  callTarget?: "operator_relay" | "coordination_session";
   selectedHospitalPhone?: string;
+  selectedDestination?: HospitalCandidate;
   hospitalName?: string;
   hospitalIndex?: number;
+  handoffStatus?: CoordinationHandoffStatus;
+  coordinationSession?: CoordinationSession;
+  facilityResponses?: FacilityResponse[];
   transcript?: string;
   summary?: string;
+  diagnosticCode?: string;
+  endedReason?: string;
+  messageAlreadySent?: boolean;
   error?: string;
+  operatorMessage?: {
+    status: "sent" | "not_configured" | "failed";
+    provider: "twilio" | "webhook" | "none";
+    id?: string;
+    code?: string;
+    error?: string;
+  };
 };
+
 type IncidentLocation = {
   label: string;
   latitude: number;
   longitude: number;
   accuracy?: number;
-  source: "gps" | "fallback";
+  source: "gps";
 };
+
 type HospitalCandidate = {
   id: string;
   name: string;
   address: string;
   phone?: string;
   distanceKm: number;
-  source: "google_places" | "fallback";
+  travelTimeMinutes?: number;
+  score: number;
+  confidence: "high" | "medium" | "low";
+  rankingReason: string;
+  mapsUrl: string;
+  source: "google_places";
 };
-type SafetyScenario = {
-  transcript: string;
-  expectedType: string;
-  expectedRoute: string;
-  safetyRule: string;
+
+type CoordinationCallAttempt = {
+  id: string;
+  targetId: string;
+  targetName: string;
+  targetType: ContactTarget["type"];
+  status: DispatchCall["status"] | "prepared";
+  callId?: string;
+  callProvider?: "vapi" | "twilio";
+  dialedNumberLabel: string;
+  routing: "configured_demo_line" | "direct_hospital_phone";
 };
-type SafetyLabResult = {
-  source: "adaption" | "local";
-  status: "idle" | "syncing" | "ready" | "running" | "failed";
-  datasetId?: string;
-  runId?: string;
-  rowCount: number;
-  estimatedCredits?: number;
-  estimatedMinutes?: number;
-  quality?: {
-    gradeBefore?: string;
-    gradeAfter?: string;
-    improvementPercent?: number;
+
+type CoordinationSession = {
+  id: string;
+  mode: "sequential_demo";
+  handoffStatus: CoordinationHandoffStatus;
+  selectedDestination?: HospitalCandidate;
+  contactTargets: ContactTarget[];
+  facilityQuestions: FacilityQuestion[];
+  facilityResponses: FacilityResponse[];
+  callAttempts: CoordinationCallAttempt[];
+  bystanderGuidance: {
+    warning: string;
+    actions: string[];
+    emergencyServicesInstruction: string;
   };
-  scenarios: SafetyScenario[];
-  note: string;
+  timeline: CoordinationTimelineItem[];
 };
-type StepDefinition = {
-  id: WorkflowStep;
-  label: string;
-  detail: string;
-  icon: LucideIcon;
-};
-type SourceBadgeValue =
-  | HospitalCandidate["source"]
-  | TriageResult["source"]
-  | SafetyLabResult["source"]
-  | IncidentLocation["source"]
-  | "test_receiver";
 
 const initialReport = "";
 
-const stepDefinitions: StepDefinition[] = [
-  { id: "start", label: "Start", detail: "Pulse ready", icon: HomeIcon },
-  { id: "location", label: "Location", detail: "GPS lock", icon: Crosshair },
-  { id: "listen", label: "Listen", detail: "Voice intake", icon: Mic },
-  { id: "triage", label: "Triage", detail: "AI guidance", icon: Stethoscope },
-  { id: "hospitals", label: "Hospitals", detail: "Distance rank", icon: Hospital },
-  { id: "dispatch", label: "Dispatch", detail: "Test receiver", icon: PhoneCall },
+const statusSteps: Array<{ phase: SendPhase; label: string }> = [
+  { phase: "sharing_location", label: "Sharing your location" },
+  { phase: "preparing_brief", label: "Understanding what happened" },
+  { phase: "finding_care", label: "Finding nearby help" },
+  { phase: "sending_brief", label: "Sharing the details" },
+  { phase: "calling_help", label: "Calling for help" },
 ];
 
-const dispatchSchedule = [
-  { at: 1, label: "Report captured" },
-  { at: 2, label: "GPS attached" },
-  { at: 4, label: "Emergency classified" },
-  { at: 6, label: "Hospitals ranked" },
-  { at: 10, label: "Test receiver called" },
-  { at: 12, label: "Call status monitored" },
-  { at: 16, label: "Brief delivered" },
-  { at: 20, label: "Guidance active" },
+const MAX_DISPATCH_CALL_ATTEMPTS = 3;
+const RETRYABLE_CALL_FAILURES = [
+  "busy",
+  "no-answer",
+  "did-not-answer",
+  "customer-busy",
+  "customer-did-not-answer",
+  "customer-cancelled",
+  "customer-rejected",
 ];
+const MAX_LOCATION_ACCURACY_METERS = 3000;
 
-function formatTime(seconds: number) {
-  const mins = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const secs = (seconds % 60).toString().padStart(2, "0");
-  return `${mins}:${secs}`;
+function formatLocationLabel(location: IncidentLocation) {
+  if (location.label && !/^current gps location$/i.test(location.label)) return location.label;
+  if (location.accuracy && Number.isFinite(location.accuracy)) {
+    return `Location locked within about ${Math.round(location.accuracy)} meters`;
+  }
+  return "Location locked";
 }
 
-function stepIndex(step: WorkflowStep) {
-  return stepDefinitions.findIndex((item) => item.id === step);
-}
-
-function isRejectedCall(text: string) {
-  const normalized = text.toLowerCase();
-  return /cannot receive|can't receive|cannot accept|can't accept|we cannot|unable to receive|unable to accept|not accepting|unavailable|full|try the next|next selected hospital|no capacity|on divert/.test(
-    normalized,
-  );
-}
-
-function isAcceptedCall(text: string) {
-  if (isRejectedCall(text)) return false;
-  const normalized = text.toLowerCase();
-  return /we can receive|can receive|we can accept|can accept|yes[,.\s]+send|send (the )?patient|receive (the )?patient|ambulance.*(send|coordinate|available)|can coordinate|will send|can send/.test(
-    normalized,
-  );
-}
-
-function formatCoordinates(location: IncidentLocation) {
-  return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`;
+function getLocationUrl(location: IncidentLocation | null) {
+  if (!location) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
 }
 
 function describeLocationError(error: unknown) {
-  if (typeof error === "object" && error && "code" in error) {
-    const code = Number((error as { code?: number }).code);
-    if (code === 1) {
-      return "Location permission is required before Pulse can continue.";
-    }
-    if (code === 2) {
-      return "Your browser could not determine a GPS location. Check device location settings and try again.";
-    }
-    if (code === 3) {
-      return "GPS lookup timed out. Move near a window or enable precise location, then try again.";
-    }
+  if (error instanceof Error && error.message === "LOCATION_TOO_BROAD") {
+    return "Your location is too broad right now. Turn on precise location or try from your phone so Pulse calls the right nearby hospital.";
   }
 
-  return "Pulse needs a real GPS location before dispatch can start.";
+  if (typeof error === "object" && error && "code" in error) {
+    const code = Number((error as { code?: number }).code);
+    if (code === 1) return "Location is needed to send help to the right place.";
+    if (code === 2) return "Your browser could not find your location. Check device location settings and try again.";
+    if (code === 3) return "Location lookup timed out. Move near a window or enable precise location, then try again.";
+  }
+
+  return "Location is needed to send help to the right place.";
 }
 
 function requestCurrentLocation() {
@@ -214,6 +241,14 @@ function requestCurrentLocation() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (
+          Number.isFinite(position.coords.accuracy) &&
+          position.coords.accuracy > MAX_LOCATION_ACCURACY_METERS
+        ) {
+          reject(new Error("LOCATION_TOO_BROAD"));
+          return;
+        }
+
         resolve({
           label: "Current GPS location",
           latitude: position.coords.latitude,
@@ -230,120 +265,6 @@ function requestCurrentLocation() {
       },
     );
   });
-}
-
-function getCallOutcome(dispatchCall: DispatchCall) {
-  const callText = `${dispatchCall.transcript || ""} ${dispatchCall.summary || ""} ${dispatchCall.error || ""}`;
-
-  if (dispatchCall.status === "failed") {
-    return {
-      label: "Call failed",
-      detail: dispatchCall.error || "Pulse could not place this outbound call.",
-      tone: "danger" as const,
-    };
-  }
-
-  if (callText.trim() && isRejectedCall(callText)) {
-    return {
-      label: "Hospital unavailable",
-      detail: "Pulse will route the next selected hospital scenario to the configured test receiver.",
-      tone: "danger" as const,
-    };
-  }
-
-  if (callText.trim() && isAcceptedCall(callText)) {
-    return {
-      label: "Receiving confirmed",
-      detail: "The test receiver confirmed the selected hospital can receive the patient.",
-      tone: "success" as const,
-    };
-  }
-
-  if (dispatchCall.status === "ended") {
-    return {
-      label: "Call completed",
-      detail: "Pulse delivered the incident brief. Review the transcript for hospital response.",
-      tone: "neutral" as const,
-    };
-  }
-
-  if (["starting", "queued", "ringing", "in-progress"].includes(dispatchCall.status)) {
-    return {
-      label: "Calling configured test receiver",
-      detail: "Pulse is routing the selected hospital scenario to the configured test receiver.",
-      tone: "warning" as const,
-    };
-  }
-
-  return {
-    label: "Selecting hospital",
-    detail: "Pulse is ranking nearby emergency facilities.",
-    tone: "neutral" as const,
-  };
-}
-
-function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: number) {
-  const earthKm = 6371;
-  const dLat = ((toLat - fromLat) * Math.PI) / 180;
-  const dLng = ((toLng - fromLng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((fromLat * Math.PI) / 180) *
-      Math.cos((toLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-  return Math.round(earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
-}
-
-function fallbackHospitals(location: IncidentLocation): HospitalCandidate[] {
-  const fallbackLocations = [
-    {
-      id: "nuh",
-      name: "National University Hospital",
-      address: "5 Lower Kent Ridge Road, Singapore",
-      latitude: 1.2931,
-      longitude: 103.7846,
-    },
-    {
-      id: "alexandra-hospital",
-      name: "Alexandra Hospital",
-      address: "378 Alexandra Road, Singapore",
-      latitude: 1.2862,
-      longitude: 103.8017,
-    },
-    {
-      id: "ng-teng-fong",
-      name: "Ng Teng Fong General Hospital",
-      address: "1 Jurong East Street 21, Singapore",
-      latitude: 1.3331,
-      longitude: 103.7456,
-    },
-    {
-      id: "gleneagles",
-      name: "Gleneagles Hospital",
-      address: "6A Napier Road, Singapore",
-      latitude: 1.3077,
-      longitude: 103.8206,
-    },
-    {
-      id: "singapore-general",
-      name: "Singapore General Hospital",
-      address: "Outram Road, Singapore",
-      latitude: 1.2807,
-      longitude: 103.8346,
-    },
-  ];
-
-  return fallbackLocations
-    .map((hospital) => ({
-      id: hospital.id,
-      name: hospital.name,
-      address: hospital.address,
-      distanceKm: distanceKm(location.latitude, location.longitude, hospital.latitude, hospital.longitude),
-      source: "fallback" as const,
-    }))
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 5);
 }
 
 function analyzeReport(report: string): TriageResult {
@@ -368,10 +289,29 @@ function analyzeReport(report: string): TriageResult {
       ],
       warning: breathingRisk
         ? "Check breathing. If not breathing normally, begin hands-only CPR if trained and able."
-        : "Keep the patient still and monitor breathing until responders arrive.",
+        : "Keep the person still and monitor breathing until responders arrive.",
       actions: breathingRisk
-        ? ["Check breathing", "Begin hands-only CPR if needed", "Keep airway clear", "Stay with the patient"]
-        : ["Keep the patient still", "Monitor breathing", "Keep them awake", "Clear space for responders"],
+        ? ["Check breathing", "Begin hands-only CPR if needed", "Keep airway clear", "Stay with the person"]
+        : ["Keep the person still", "Monitor breathing", "Keep them awake", "Clear space for responders"],
+      situationSummary: breathingRisk
+        ? "The person may not be breathing normally. Stay close and act calmly."
+        : "The person may be having serious breathing or chest symptoms. Keep them still and watch them closely.",
+      doNow: breathingRisk
+        ? ["Check breathing", "Keep the airway clear", "Start hands-only CPR if needed", "Stay with the person"]
+        : ["Keep the person still", "Watch breathing", "Keep them awake", "Clear space around them"],
+      doNotDo: [
+        "Do not give food or drink",
+        "Do not crowd around them",
+        "Do not let them walk around",
+      ],
+      watchFor: [
+        "Breathing changes",
+        "Fainting or confusion",
+        "Chest pain getting worse",
+      ],
+      infographicBrief: breathingRisk
+        ? "Show a calm bystander checking breathing, keeping the airway clear, and starting hands-only CPR only if the person is not breathing normally."
+        : "Show a calm bystander keeping a person still, watching breathing, keeping them awake, and clearing space.",
       dispatchBrief:
         "Critical medical emergency reported by bystander. Patient may have breathing, consciousness, or cardiac risk. Immediate emergency department coordination required.",
       source: "local_fallback",
@@ -389,100 +329,246 @@ function analyzeReport(report: string): TriageResult {
       beingMoved ? "Patient is being moved" : "Movement risk needs control",
       "Trauma-capable emergency care required",
     ],
-    warning: "Do not move the patient unless there is immediate danger.",
+    warning: "Do not move the person unless there is immediate danger.",
     actions: [
-      "Stop people from moving him",
-      hasBleeding ? "Apply firm pressure to bleeding" : "Check for bleeding",
-      "Keep him still and awake",
+      "Keep them still",
+      hasBleeding ? "Press firmly on bleeding" : "Check for bleeding",
+      "Keep them awake",
       "Watch breathing",
     ],
+    situationSummary: "The person may have a serious injury. Keep them still and make the area safe.",
+    doNow: [
+      "Keep them still",
+      hasBleeding ? "Press firmly on bleeding" : "Check for bleeding",
+      "Keep people back",
+      "Watch breathing",
+    ],
+    doNotDo: [
+      "Do not move them unless there is danger",
+      "Do not give food or drink",
+      "Do not crowd around them",
+    ],
+    watchFor: [
+      "Breathing changes",
+      "Heavy bleeding",
+      "Confusion or fainting",
+    ],
+    infographicBrief:
+      "Show a calm bystander keeping an injured person still, pressing cloth on bleeding if needed, clearing space, and watching breathing. Non-graphic.",
     dispatchBrief:
       "Major trauma reported by bystander. Possible fracture, bleeding status requires attention, and patient movement must be controlled. Trauma-capable emergency care required.",
     source: "local_fallback",
   };
 }
 
+function phaseIndex(phase: SendPhase) {
+  if (phase === "done") return statusSteps.length;
+  if (phase === "failed") return -1;
+  const index = statusSteps.findIndex((step) => step.phase === phase);
+  return index >= 0 ? index : -1;
+}
+
+function isRetryableCallFailure(reason?: string) {
+  if (!reason) return false;
+  const normalized = reason.toLowerCase();
+  return RETRYABLE_CALL_FAILURES.some((retryableReason) => normalized.includes(retryableReason));
+}
+
+function getHelpStatus(dispatchCall: DispatchCall, sendPhase: SendPhase) {
+  const handoffStatus = dispatchCall.handoffStatus || dispatchCall.coordinationSession?.handoffStatus;
+
+  if (handoffStatus === "failed" || dispatchCall.status === "failed" || sendPhase === "failed") {
+    return {
+      title: "Pulse could not confirm help.",
+      detail: dispatchCall.error || "Pulse could not confirm that help accepted this case. Call local emergency services now.",
+      tone: "danger" as const,
+    };
+  }
+
+  if (dispatchCall.verificationOnly) {
+    return {
+      title: "The details are ready.",
+      detail: "No call was placed in this run. Use your location and the steps on this screen.",
+      tone: "warning" as const,
+    };
+  }
+
+  if (handoffStatus === "accepted") {
+    return {
+      title: "Help has accepted the case.",
+      detail: "Pulse has evidence that the selected care team can receive the person. Keep following the steps until responders or transport arrive.",
+      tone: "success" as const,
+    };
+  }
+
+  if (handoffStatus === "not_confirmed" || dispatchCall.status === "ended" || sendPhase === "done") {
+    return {
+      title: "Help was not confirmed.",
+      detail: "Pulse finished the call but did not get a clear yes. Call local emergency services now and continue the steps below.",
+      tone: "danger" as const,
+    };
+  }
+
+  if (handoffStatus === "connected" || ["starting", "queued", "ringing", "in-progress"].includes(dispatchCall.status)) {
+    return {
+      title: handoffStatus === "connected" ? "Pulse is talking to help." : "Pulse is calling for help.",
+      detail: "Pulse has shared what happened and is asking if they can receive the person. Keep this screen open.",
+      tone: "warning" as const,
+    };
+  }
+
+  return {
+    title: "Pulse is getting help ready.",
+    detail: "Pulse is sharing your location and what happened.",
+    tone: "warning" as const,
+  };
+}
+
+function getCoordinationTimeline(dispatchCall: DispatchCall, sendPhase: SendPhase): CoordinationTimelineItem[] {
+  const session = dispatchCall.coordinationSession;
+  const handoffStatus = dispatchCall.handoffStatus || session?.handoffStatus;
+  const sessionTimeline = session?.timeline || [];
+
+  if (sessionTimeline.length > 0) {
+    return sessionTimeline.map((item) => {
+      if (item.id !== "facility-call") return item;
+      if (handoffStatus === "accepted") {
+        return {
+          ...item,
+          label: "Help accepted the case",
+          detail: "The call evidence indicates the selected care team accepted the case.",
+          state: "done",
+        };
+      }
+      if (handoffStatus === "not_confirmed") {
+        return {
+          ...item,
+          label: "Help not confirmed",
+          detail: "The call ended without a clear yes. Use local emergency services now.",
+          state: "attention",
+        };
+      }
+      if (handoffStatus === "failed" || sendPhase === "failed") {
+        return {
+          ...item,
+          detail: dispatchCall.error || "The call did not complete.",
+          state: "attention",
+        };
+      }
+      return item;
+    });
+  }
+
+  const messageStatus = dispatchCall.operatorMessage?.status;
+  const messageReady =
+    messageStatus === "sent" ||
+    dispatchCall.messageAlreadySent ||
+    dispatchCall.status === "queued" ||
+    dispatchCall.status === "ringing" ||
+    dispatchCall.status === "in-progress" ||
+    dispatchCall.status === "ended";
+  const callActive = dispatchCall.status === "queued" || dispatchCall.status === "ringing" || dispatchCall.status === "in-progress";
+  const accepted = handoffStatus === "accepted";
+  const notConfirmed = handoffStatus === "not_confirmed" || dispatchCall.status === "ended" || sendPhase === "done";
+  const failed = dispatchCall.status === "failed" || sendPhase === "failed";
+
+  return [
+    {
+      title: "Location and report",
+      detail: "Shared with the details Pulse sends.",
+      state: "done",
+    },
+    {
+      title: "Nearby care",
+      detail: dispatchCall.hospitalName || "Nearby care selected.",
+      state: failed && !dispatchCall.hospitalName ? "attention" : "done",
+    },
+    {
+      title: "Message sent",
+      detail: messageReady ? "Map and details were shared." : "Waiting to share the details.",
+      state: messageReady ? "done" : failed ? "attention" : "active",
+    },
+    {
+      id: "facility-call",
+      label: accepted ? "Help accepted the case" : notConfirmed ? "Help not confirmed" : "Calling for help",
+      title: accepted ? "Help accepted the case" : notConfirmed ? "Help not confirmed" : "Calling for help",
+      detail: accepted
+        ? "The selected care team accepted the case."
+        : notConfirmed
+          ? "The call ended without a clear yes."
+        : callActive
+          ? "Call is in progress."
+          : failed
+            ? "Call did not complete."
+            : "Call is starting.",
+      state: accepted ? "done" : notConfirmed || failed ? "attention" : "active",
+    },
+  ].map((item, index) => ({
+    id: "id" in item ? item.id : `fallback-${index}`,
+    label: "label" in item ? item.label : item.title,
+    detail: item.detail,
+    state: item.state,
+  })) as CoordinationTimelineItem[];
+}
+
 export default function Home() {
-  const [step, setStep] = useState<WorkflowStep>("start");
+  const [step, setStep] = useState<AppStep>("start");
   const [report, setReport] = useState(initialReport);
   const [submittedReport, setSubmittedReport] = useState("");
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
   const [dispatchCall, setDispatchCall] = useState<DispatchCall>({ status: "idle" });
   const [incidentLocation, setIncidentLocation] = useState<IncidentLocation | null>(null);
   const [hospitals, setHospitals] = useState<HospitalCandidate[]>([]);
-  const [elapsed, setElapsed] = useState(0);
   const [locationState, setLocationState] = useState<LocationState>("idle");
   const [locationError, setLocationError] = useState("");
   const [speechState, setSpeechState] = useState<SpeechState>("idle");
   const [micState, setMicState] = useState<MicState>("idle");
-  const [safetyLab, setSafetyLab] = useState<SafetyLabResult | null>(null);
+  const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
+  const [audioLevels, setAudioLevels] = useState([18, 34, 52, 38, 24]);
+  const [silenceNotice, setSilenceNotice] = useState("");
+  const [transcriptSource, setTranscriptSource] = useState<"live" | "final" | "typed">("typed");
+  const [guidanceImage, setGuidanceImage] = useState<InfographicResult>({
+    status: "idle",
+    altText: "Simple emergency guidance with calm steps for the bystander.",
+    caption: "",
+  });
   const reportRef = useRef<HTMLTextAreaElement | null>(null);
-  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const committedSpeechRef = useRef("");
+  const interimSpeechRef = useRef("");
   const shouldListenRef = useRef(false);
   const micStreamRef = useRef<MediaStream | null>(null);
-  const retriedCallRef = useRef<string | null>(null);
-  const safetyLabStartedRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioMeterFrameRef = useRef<number | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
+  const realtimeReconnectsRef = useRef(0);
+  const retryingCallIdRef = useRef<string | null>(null);
+  const dispatchContextRef = useRef<{
+    submittedReport: string;
+    triage: TriageResult | null;
+    incidentLocation: IncidentLocation | null;
+    hospitals: HospitalCandidate[];
+  }>({
+    submittedReport: "",
+    triage: null,
+    incidentLocation: null,
+    hospitals: [],
+  });
 
   const fallbackTriage = useMemo(() => analyzeReport(submittedReport || report), [report, submittedReport]);
   const triage = triageResult ?? fallbackTriage;
-  const visibleEvents = useMemo(
-    () => dispatchSchedule.filter((event) => elapsed >= event.at),
-    [elapsed],
-  );
-  const selectedHospital = hospitals[dispatchCall.hospitalIndex ?? 0] || hospitals[0];
 
   useEffect(() => {
-    if (!["triage", "hospitals", "dispatch"].includes(step)) return;
-    const timer = window.setTimeout(() => setElapsed((value) => value + 1), 1000);
-    return () => window.clearTimeout(timer);
-  }, [elapsed, step]);
-
-  useEffect(() => {
-    if (!dispatchCall.callId || dispatchCall.status === "ended" || dispatchCall.status === "failed") {
-      return;
-    }
-
-    const timer = window.setInterval(async () => {
-      try {
-        const response = await fetch(`/api/dispatch/status?callId=${dispatchCall.callId}`);
-        if (!response.ok) return;
-        const data = (await response.json()) as {
-          status?: DispatchCall["status"];
-          transcript?: string;
-          summary?: string;
-        };
-        setDispatchCall((current) => ({
-          ...current,
-          status: data.status || current.status,
-          transcript: data.transcript || current.transcript,
-          summary: data.summary || current.summary,
-        }));
-      } catch {
-        // Keep the current status visible; polling can recover on the next tick.
-      }
-    }, 3000);
-
-    return () => window.clearInterval(timer);
-  }, [dispatchCall.callId, dispatchCall.status]);
-
-  useEffect(() => {
-    if (
-      dispatchCall.status !== "ended" ||
-      !dispatchCall.callId ||
-      retriedCallRef.current === dispatchCall.callId ||
-      !isRejectedCall(dispatchCall.transcript || dispatchCall.summary || "")
-    ) {
-      return;
-    }
-
-    retriedCallRef.current = dispatchCall.callId;
-    const nextIndex = (dispatchCall.hospitalIndex ?? 0) + 1;
-    const nextHospital = hospitals[nextIndex];
-    if (!nextHospital || !submittedReport || !triageResult || !incidentLocation) return;
-
-    startDispatchCall(submittedReport, triageResult, nextHospital, incidentLocation, nextIndex);
-  }, [dispatchCall, hospitals, incidentLocation, submittedReport, triageResult]);
+    dispatchContextRef.current = {
+      submittedReport,
+      triage,
+      incidentLocation,
+      hospitals,
+    };
+  }, [submittedReport, triage, incidentLocation, hospitals]);
 
   useEffect(() => {
     if (step === "listen") {
@@ -490,71 +576,27 @@ export default function Home() {
     }
   }, [step]);
 
-  useEffect(() => {
-    if (step !== "dispatch" || safetyLabStartedRef.current) return;
-
-    let ignore = false;
-    safetyLabStartedRef.current = true;
-    fetch("/api/adaption/safety-lab", { method: "POST" })
-      .then(async (response) => {
-        const data = (await response.json()) as SafetyLabResult;
-        if (!ignore) setSafetyLab(data);
-      })
-      .catch(() => {
-        if (!ignore) {
-          setSafetyLab({
-            source: "local",
-            status: "failed",
-            rowCount: 0,
-            scenarios: [],
-            note: "Safety lab could not sync in this session.",
-          });
-        }
-      })
-      .finally(() => {
-        if (ignore) safetyLabStartedRef.current = false;
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [step]);
-
-  useEffect(() => {
-    return () => {
-      shouldListenRef.current = false;
-      recognitionRef.current?.abort();
-      micStreamRef.current?.getTracks().forEach((track) => track.stop());
-    };
-  }, []);
-
-  function canOpenStep(target: WorkflowStep) {
-    if (target === "start") return true;
-    if (target === "location") return step !== "start" || locationState !== "idle";
-    if (target === "listen") return Boolean(incidentLocation);
-    if (target === "triage") return Boolean(submittedReport || triageResult || ["triage", "hospitals", "dispatch"].includes(step));
-    if (target === "hospitals") return hospitals.length > 0 || step === "hospitals" || step === "dispatch";
-    return dispatchCall.status !== "idle" || step === "dispatch";
-  }
-
-  function openStep(target: WorkflowStep) {
-    if (canOpenStep(target)) setStep(target);
-  }
-
   async function startPulse() {
     if (locationState === "locking") return;
 
-    setStep("location");
-    setElapsed(0);
+    setStep("start");
     setReport("");
     setSubmittedReport("");
     setTriageResult(null);
     setDispatchCall({ status: "idle" });
     setHospitals([]);
-    setSafetyLab(null);
-    safetyLabStartedRef.current = false;
-    retriedCallRef.current = null;
+    setSendPhase("idle");
+    setSilenceNotice("");
+    setTranscriptSource("typed");
+    setGuidanceImage({
+      status: "idle",
+      altText: "Simple emergency guidance with calm steps for the bystander.",
+      caption: "",
+    });
     committedSpeechRef.current = "";
+    interimSpeechRef.current = "";
+    realtimeReconnectsRef.current = 0;
+    retryingCallIdRef.current = null;
     setLocationError("");
     setIncidentLocation(null);
     setLocationState("locking");
@@ -567,11 +609,50 @@ export default function Home() {
     } catch (error) {
       setLocationState("unavailable");
       setLocationError(describeLocationError(error));
-      setStep("location");
+      setStep("start");
       return;
     }
 
-    startSpeechCapture();
+    await startSpeechCapture();
+  }
+
+  async function prepareReportConfirmation(value = report) {
+    const fallback = value.trim();
+    if (fallback.length < 12) return;
+
+    shouldListenRef.current = false;
+    setSpeechState("processing");
+    const audioBlob = await stopMediaRecording();
+    stopRealtimeConnection();
+    stopAudioMeter();
+    micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    micStreamRef.current = null;
+
+    try {
+      const formData = new FormData();
+      if (audioBlob) {
+        formData.set("audio", audioBlob, "pulse-report.webm");
+      }
+      formData.set("fallbackText", fallback);
+      const response = await fetch("/api/speech/finalize", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json().catch(() => null)) as {
+        text?: string;
+        source?: "openai" | "realtime_fallback";
+      } | null;
+      const finalText = data?.text?.trim() || fallback;
+      setReport(finalText);
+      setTranscriptSource(data?.source === "openai" ? "final" : "live");
+    } catch {
+      setTranscriptSource("live");
+      setReport(fallback);
+    }
+
+    setSpeechState("idle");
+    setSilenceNotice("");
+    setStep("confirm");
   }
 
   async function submitCapturedReport(value = report) {
@@ -579,15 +660,16 @@ export default function Home() {
     if (cleaned.length < 12) return;
     shouldListenRef.current = false;
     setSpeechState("processing");
-    recognitionRef.current?.stop();
+    stopRealtimeCapture();
     setSubmittedReport(cleaned);
-    setElapsed(0);
+    setSendPhase("sharing_location");
     setTriageResult(null);
     setDispatchCall({ status: "idle" });
-    retriedCallRef.current = null;
-    setStep("triage");
+    retryingCallIdRef.current = null;
+    setStep("sending");
 
     let resolvedTriage = analyzeReport(cleaned);
+    setSendPhase("preparing_brief");
     try {
       const response = await fetch("/api/triage", {
         method: "POST",
@@ -595,10 +677,7 @@ export default function Home() {
         body: JSON.stringify({ transcript: cleaned }),
       });
 
-      if (!response.ok) {
-        throw new Error("Triage request failed");
-      }
-
+      if (!response.ok) throw new Error("Brief preparation failed");
       const data = (await response.json()) as { triage: TriageResult };
       resolvedTriage = data.triage;
       setTriageResult(resolvedTriage);
@@ -606,36 +685,32 @@ export default function Home() {
       setTriageResult(resolvedTriage);
     }
 
-    setStep("hospitals");
+    loadGuidanceImage(cleaned, resolvedTriage);
 
     try {
+      setSendPhase("finding_care");
       const hospitalSearch = await loadNearbyHospitals();
       const chosenHospital = hospitalSearch.hospitals[0];
-      if (!chosenHospital) {
-        throw new Error("No hospital candidates were available.");
-      }
+      if (!chosenHospital) throw new Error("No emergency care was found nearby.");
       setSpeechState("idle");
-      setStep("dispatch");
-      startDispatchCall(
-        cleaned,
-        resolvedTriage,
-        chosenHospital,
-        hospitalSearch.incidentLocation,
-        0,
-      );
+      setSendPhase("sending_brief");
+      await startDispatchCall(cleaned, resolvedTriage, chosenHospital, hospitalSearch.incidentLocation, 0, {
+        hospitalsForCall: hospitalSearch.hospitals,
+      });
     } catch (error) {
       setSpeechState("idle");
-      setStep("dispatch");
+      setSendPhase("failed");
+      setStep("done");
       setDispatchCall({
         status: "failed",
-        error: error instanceof Error ? error.message : "Hospital search failed",
+        error: error instanceof Error ? error.message : "We could not complete the call. Try again or call local emergency services now.",
       });
     }
   }
 
   async function loadNearbyHospitals() {
     if (!incidentLocation) {
-      throw new Error("GPS location is required before hospital search.");
+      throw new Error("Location is needed to send help to the right place.");
     }
 
     const params = new URLSearchParams({
@@ -645,45 +720,93 @@ export default function Home() {
 
     try {
       const response = await fetch(`/api/hospitals?${params.toString()}`);
-      if (!response.ok) throw new Error("Hospital search failed");
+      if (!response.ok) throw new Error("Emergency care search failed");
       const data = (await response.json()) as {
         incidentLocation: IncidentLocation;
         hospitals: HospitalCandidate[];
-        source?: "google_places" | "fallback";
+        source?: "google_places" | "unavailable";
       };
       const resolvedLocation = {
         ...incidentLocation,
         ...data.incidentLocation,
         accuracy: incidentLocation.accuracy,
       };
-      const resolvedHospitals = data.hospitals.length > 0 ? data.hospitals : fallbackHospitals(resolvedLocation);
+      if (data.hospitals.length === 0) throw new Error("No emergency care was found nearby.");
       setIncidentLocation(resolvedLocation);
-      setHospitals(resolvedHospitals);
+      setHospitals(data.hospitals);
       return {
         incidentLocation: resolvedLocation,
-        hospitals: resolvedHospitals,
+        hospitals: data.hospitals,
       };
-    } catch {
-      const resolvedHospitals = fallbackHospitals(incidentLocation);
-      setHospitals(resolvedHospitals);
-      return {
-        incidentLocation,
-        hospitals: resolvedHospitals,
-      };
+    } catch (error) {
+      setHospitals([]);
+      throw error instanceof Error ? error : new Error("Emergency care search failed");
     }
   }
 
-  async function startDispatchCall(
+  async function loadGuidanceImage(transcript: string, triageForImage: TriageResult) {
+    setGuidanceImage({
+      status: "loading",
+      altText: triageForImage.situationSummary,
+      caption: "Making a simple visual guide for you.",
+      source: "fallback",
+    });
+
+    try {
+      const response = await fetch("/api/guidance/infographic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          triage: triageForImage,
+          incidentLocation,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        status?: "generated" | "fallback";
+        imageDataUrl?: string;
+        altText?: string;
+        caption?: string;
+        source?: "openai" | "fallback";
+      } | null;
+
+      setGuidanceImage({
+        status: data?.status || "fallback",
+        imageDataUrl: data?.imageDataUrl,
+        altText: data?.altText || triageForImage.situationSummary,
+        caption: data?.caption || "Follow the simple steps below.",
+        source: data?.source || "fallback",
+      });
+    } catch {
+      setGuidanceImage({
+        status: "fallback",
+        altText: triageForImage.situationSummary,
+        caption: "Follow the simple steps below.",
+        source: "fallback",
+      });
+    }
+  }
+
+  const startDispatchCall = useCallback(async (
     transcript: string,
     triageForCall: TriageResult,
     hospital: HospitalCandidate,
     readableLocation: IncidentLocation,
     hospitalIndex: number,
-  ) {
+    options: {
+      attempt?: number;
+      messageAlreadySent?: boolean;
+      hospitalsForCall?: HospitalCandidate[];
+    } = {},
+  ) => {
+    const attempt = options.attempt ?? 1;
+    const hospitalsForCall = options.hospitalsForCall ?? hospitals;
     setDispatchCall({
       status: "starting",
+      attempt,
       hospitalName: hospital.name,
       hospitalIndex,
+      messageAlreadySent: options.messageAlreadySent,
     });
 
     try {
@@ -695,39 +818,162 @@ export default function Home() {
           triage: triageForCall,
           incidentLocation: readableLocation,
           hospital,
+          hospitals: hospitalsForCall,
+          messageAlreadySent: options.messageAlreadySent,
         }),
       });
 
       if (!response.ok) {
-        const error = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(error?.error || "Dispatch call failed");
+        const error = (await response.json().catch(() => null)) as {
+          error?: string;
+          operatorMessage?: DispatchCall["operatorMessage"];
+        } | null;
+        throw new Error(error?.operatorMessage?.error || error?.error || "We could not complete the call.");
       }
 
-      const data = (await response.json()) as {
-        callId?: string;
-        status?: DispatchCall["status"];
-        receivingPhone?: string;
-        callTarget?: "test_receiver";
-        selectedHospitalPhone?: string;
-      };
-      setDispatchCall({
-        callId: data.callId,
-        hospitalName: hospital.name,
-        hospitalIndex,
-        receivingPhone: data.receivingPhone,
-        callTarget: data.callTarget,
-        selectedHospitalPhone: data.selectedHospitalPhone,
-        status: data.status || "queued",
-      });
+	      const data = (await response.json()) as {
+	        callId?: string;
+	        status?: DispatchCall["status"];
+	        verificationOnly?: boolean;
+	        receivingPhone?: string;
+	        callTarget?: DispatchCall["callTarget"];
+	        selectedHospitalPhone?: string;
+	        selectedDestination?: HospitalCandidate;
+	        handoffStatus?: CoordinationHandoffStatus;
+	        coordinationSession?: CoordinationSession;
+	        summary?: string;
+	        transcript?: string;
+	        operatorMessage?: DispatchCall["operatorMessage"];
+	      };
+	      const nextStatus = data.status || "queued";
+	      const nextHandoffStatus = data.handoffStatus || data.coordinationSession?.handoffStatus;
+	      setSendPhase(nextStatus === "failed" || nextHandoffStatus === "failed" ? "failed" : nextStatus === "ended" ? "done" : "calling_help");
+	      setDispatchCall({
+	        callId: data.callId,
+	        attempt,
+	        verificationOnly: data.verificationOnly,
+	        hospitalName: hospital.name,
+	        hospitalIndex,
+	        messageAlreadySent: options.messageAlreadySent,
+	        receivingPhone: data.receivingPhone,
+	        callTarget: data.callTarget,
+	        selectedHospitalPhone: data.selectedHospitalPhone,
+	        selectedDestination: data.selectedDestination || data.coordinationSession?.selectedDestination,
+	        handoffStatus: nextHandoffStatus,
+	        coordinationSession: data.coordinationSession,
+	        facilityResponses: data.coordinationSession?.facilityResponses,
+	        operatorMessage: data.operatorMessage,
+	        summary: data.summary,
+	        transcript: data.transcript,
+	        status: nextStatus,
+	      });
+      if (nextStatus === "ended" || nextStatus === "failed") {
+        setStep("done");
+      }
     } catch (error) {
       setDispatchCall({
         status: "failed",
+        attempt,
         hospitalName: hospital.name,
         hospitalIndex,
-        error: error instanceof Error ? error.message : "Dispatch call failed",
+        messageAlreadySent: options.messageAlreadySent,
+        error: error instanceof Error ? error.message : "We could not complete the call. Try again or call local emergency services now.",
       });
+      setSendPhase("failed");
+      setStep("done");
     }
-  }
+  }, [hospitals]);
+
+  useEffect(() => {
+    if (dispatchCall.verificationOnly || !dispatchCall.callId || dispatchCall.status === "ended" || dispatchCall.status === "failed") {
+      return;
+    }
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/dispatch/status?callId=${dispatchCall.callId}`);
+        if (!response.ok) return;
+	        const data = (await response.json()) as {
+	          status?: DispatchCall["status"];
+	          transcript?: string;
+	          summary?: string;
+	          diagnosticCode?: string;
+	          endedReason?: string;
+	          handoffStatus?: CoordinationHandoffStatus;
+	          facilityResponses?: FacilityResponse[];
+	        };
+	        const diagnosticCode = data.diagnosticCode || data.endedReason;
+	        setDispatchCall((current) => ({
+	          ...current,
+	          status: data.status || current.status,
+	          transcript: data.transcript || current.transcript,
+	          summary: data.summary || current.summary,
+	          diagnosticCode: diagnosticCode || current.diagnosticCode,
+	          endedReason: data.endedReason || current.endedReason,
+	          handoffStatus: data.handoffStatus || current.handoffStatus,
+	          facilityResponses: data.facilityResponses || current.facilityResponses,
+	          coordinationSession: current.coordinationSession
+	            ? {
+	                ...current.coordinationSession,
+	                handoffStatus: data.handoffStatus || current.coordinationSession.handoffStatus,
+	                facilityResponses: data.facilityResponses || current.coordinationSession.facilityResponses,
+	              }
+	            : current.coordinationSession,
+	        }));
+	        if (data.status === "ended") {
+	          setSendPhase("done");
+	          setStep("done");
+        }
+        if (data.status === "failed") {
+	          const currentAttempt = dispatchCall.attempt ?? 1;
+	          const nextAttempt = currentAttempt + 1;
+	          const context = dispatchContextRef.current;
+	          const hospitalIndex = dispatchCall.hospitalIndex ?? 0;
+	          const nextHospitalIndex = Math.min(hospitalIndex + 1, Math.max(context.hospitals.length - 1, 0));
+	          const hospital = context.hospitals[nextHospitalIndex] ?? context.hospitals[hospitalIndex] ?? context.hospitals[0];
+	          if (
+	            dispatchCall.callId &&
+	            retryingCallIdRef.current !== dispatchCall.callId &&
+	            isRetryableCallFailure(diagnosticCode) &&
+            currentAttempt < MAX_DISPATCH_CALL_ATTEMPTS &&
+            context.submittedReport &&
+            context.triage &&
+            context.incidentLocation &&
+            hospital
+          ) {
+            retryingCallIdRef.current = dispatchCall.callId;
+            setSendPhase("calling_help");
+            await startDispatchCall(
+              context.submittedReport,
+	              context.triage,
+	              hospital,
+	              context.incidentLocation,
+	              nextHospitalIndex,
+	              {
+	                attempt: nextAttempt,
+	                messageAlreadySent: true,
+	                hospitalsForCall: context.hospitals,
+              },
+            );
+            return;
+          }
+          setSendPhase("failed");
+          setStep("done");
+        }
+      } catch {
+        // Polling can recover on the next tick.
+      }
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    dispatchCall.attempt,
+    dispatchCall.callId,
+    dispatchCall.hospitalIndex,
+    dispatchCall.verificationOnly,
+    dispatchCall.status,
+    startDispatchCall,
+  ]);
 
   async function requestMicrophoneAccess() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -738,7 +984,13 @@ export default function Home() {
     try {
       setMicState("requesting");
       micStreamRef.current?.getTracks().forEach((track) => track.stop());
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       micStreamRef.current = stream;
       setMicState("granted");
       return true;
@@ -748,77 +1000,235 @@ export default function Home() {
     }
   }
 
-  async function startSpeechCapture() {
-    const SpeechRecognition =
-      (window as SpeechWindow).SpeechRecognition ||
-      (window as SpeechWindow).webkitSpeechRecognition;
+  function stopRealtimeConnection() {
+    dataChannelRef.current?.close();
+    peerConnectionRef.current?.close();
+    dataChannelRef.current = null;
+    peerConnectionRef.current = null;
+  }
 
-    if (!SpeechRecognition) {
+  function stopAudioMeter() {
+    if (audioMeterFrameRef.current) {
+      window.cancelAnimationFrame(audioMeterFrameRef.current);
+      audioMeterFrameRef.current = null;
+    }
+    audioContextRef.current?.close().catch(() => undefined);
+    audioContextRef.current = null;
+    if (silenceTimerRef.current) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }
+
+  function stopRealtimeCapture() {
+    shouldListenRef.current = false;
+    stopRealtimeConnection();
+    stopAudioMeter();
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    mediaRecorderRef.current = null;
+    micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    micStreamRef.current = null;
+  }
+
+  useEffect(() => {
+    return () => {
+      shouldListenRef.current = false;
+      dataChannelRef.current?.close();
+      peerConnectionRef.current?.close();
+      if (audioMeterFrameRef.current) {
+        window.cancelAnimationFrame(audioMeterFrameRef.current);
+      }
+      audioContextRef.current?.close().catch(() => undefined);
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  function startMediaRecording(stream: MediaStream) {
+    audioChunksRef.current = [];
+    if (!window.MediaRecorder) return;
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      recorder.start(500);
+    } catch {
+      mediaRecorderRef.current = null;
+    }
+  }
+
+  function stopMediaRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return Promise.resolve(audioChunksRef.current.length > 0 ? new Blob(audioChunksRef.current, { type: "audio/webm" }) : null);
+    }
+
+    return new Promise<Blob | null>((resolve) => {
+      recorder.onstop = () => {
+        const blob = audioChunksRef.current.length > 0 ? new Blob(audioChunksRef.current, { type: "audio/webm" }) : null;
+        mediaRecorderRef.current = null;
+        resolve(blob);
+      };
+      recorder.stop();
+    });
+  }
+
+  function startAudioMeter(stream: MediaStream) {
+    stopAudioMeter();
+    try {
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioContext = new AudioContextClass();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      audioContextRef.current = audioContext;
+
+      const tick = () => {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const value of data) {
+          const centered = value - 128;
+          sum += centered * centered;
+        }
+        const volume = Math.min(100, Math.sqrt(sum / data.length) * 5);
+        setAudioLevels((current) => current.map((_, index) => Math.max(12, Math.min(86, volume * (0.55 + index * 0.16) + 10))));
+        audioMeterFrameRef.current = window.requestAnimationFrame(tick);
+      };
+      tick();
+    } catch {
+      setAudioLevels([22, 40, 62, 44, 28]);
+    }
+  }
+
+  function handleRealtimeTranscriptEvent(event: RealtimeTranscriptEvent) {
+    if (event.type === "conversation.item.input_audio_transcription.delta" || event.type === "transcript.text.delta") {
+      interimSpeechRef.current = `${interimSpeechRef.current}${event.delta || ""}`;
+      setReport(`${committedSpeechRef.current}${interimSpeechRef.current}`.trimStart());
+      setTranscriptSource("live");
+      setSilenceNotice("");
+      if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = window.setTimeout(() => {
+        if (shouldListenRef.current) {
+          setSilenceNotice("Still listening. Add anything important, then tap Looks right.");
+        }
+      }, 3800);
+      return;
+    }
+
+    if (event.type === "conversation.item.input_audio_transcription.completed" || event.type === "transcript.text.done") {
+      const transcript = event.transcript?.trim();
+      if (transcript) {
+        committedSpeechRef.current = `${committedSpeechRef.current}${transcript} `;
+      }
+      interimSpeechRef.current = "";
+      setReport(committedSpeechRef.current.trimStart());
+      setTranscriptSource("live");
+    }
+  }
+
+  async function startSpeechCapture() {
+    if (!window.RTCPeerConnection) {
       setSpeechState("unsupported");
       return;
     }
 
+    stopRealtimeCapture();
     const hasMicrophone = await requestMicrophoneAccess();
-    if (!hasMicrophone) {
+    if (!hasMicrophone || !micStreamRef.current) {
       setSpeechState("error");
       return;
     }
 
     try {
-      recognitionRef.current?.abort();
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
       shouldListenRef.current = true;
-      committedSpeechRef.current = "";
+      setSpeechState("connecting");
+      setSilenceNotice("");
 
-      recognition.onresult = (event: SpeechEventLike) => {
-        let interim = "";
-        let committed = committedSpeechRef.current;
+      const sessionResponse = await fetch("/api/realtime/session", { method: "POST" });
+      if (!sessionResponse.ok) throw new Error("Speech connection unavailable");
+      const session = (await sessionResponse.json()) as { clientSecret?: string };
+      if (!session.clientSecret) throw new Error("Speech connection unavailable");
 
-        for (let index = event.resultIndex; index < event.results.length; index += 1) {
-          const transcript = event.results[index][0].transcript;
-          if (event.results[index].isFinal) {
-            committed += `${transcript.trim()} `;
-          } else {
-            interim += transcript;
+      const peerConnection = new RTCPeerConnection();
+      peerConnectionRef.current = peerConnection;
+      micStreamRef.current.getAudioTracks().forEach((track) => {
+        peerConnection.addTrack(track, micStreamRef.current as MediaStream);
+      });
+      startMediaRecording(micStreamRef.current);
+      startAudioMeter(micStreamRef.current);
+
+      const dataChannel = peerConnection.createDataChannel("oai-events");
+      dataChannelRef.current = dataChannel;
+      dataChannel.onmessage = (message) => {
+        try {
+          const event = JSON.parse(message.data) as RealtimeTranscriptEvent;
+          if (event.type === "error") {
+            setSpeechState("error");
+            return;
           }
+          handleRealtimeTranscriptEvent(event);
+        } catch {
+          // Ignore non-JSON transport messages.
         }
-
-        committedSpeechRef.current = committed;
-        setReport(`${committed}${interim}`.trimStart());
       };
-
-      recognition.onerror = () => {
-        setSpeechState("error");
-      };
-
-      recognition.onend = () => {
-        if (shouldListenRef.current) {
-          try {
-            recognition.start();
-          } catch {
+      dataChannel.onerror = () => setSpeechState("error");
+      peerConnection.onconnectionstatechange = () => {
+        if (["failed", "disconnected", "closed"].includes(peerConnection.connectionState) && shouldListenRef.current) {
+          if (realtimeReconnectsRef.current < 1) {
+            realtimeReconnectsRef.current += 1;
+            stopRealtimeConnection();
+            window.setTimeout(() => {
+              if (shouldListenRef.current) startSpeechCapture();
+            }, 400);
+          } else {
             setSpeechState("error");
           }
-          return;
         }
-        setSpeechState((current) => (current === "processing" ? current : "idle"));
       };
 
-      recognition.start();
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls?intent=transcription", {
+        method: "POST",
+        body: offer.sdp,
+        headers: {
+          Authorization: `Bearer ${session.clientSecret}`,
+          "Content-Type": "application/sdp",
+        },
+      });
+
+      if (!sdpResponse.ok) throw new Error("Speech connection failed");
+
+      await peerConnection.setRemoteDescription({
+        type: "answer",
+        sdp: await sdpResponse.text(),
+      });
       setSpeechState("listening");
+      silenceTimerRef.current = window.setTimeout(() => {
+        if (shouldListenRef.current) {
+          setSilenceNotice("Listening now. Say what happened, or type it below.");
+        }
+      }, 3500);
     } catch {
+      stopRealtimeConnection();
       setSpeechState("error");
     }
   }
 
   function reset() {
-    shouldListenRef.current = false;
-    recognitionRef.current?.abort();
-    micStreamRef.current?.getTracks().forEach((track) => track.stop());
-    micStreamRef.current = null;
+    stopRealtimeCapture();
     setStep("start");
     setReport("");
     setSubmittedReport("");
@@ -826,257 +1236,135 @@ export default function Home() {
     setDispatchCall({ status: "idle" });
     setIncidentLocation(null);
     setHospitals([]);
-    retriedCallRef.current = null;
     setSpeechState("idle");
     setMicState("idle");
-    setSafetyLab(null);
-    safetyLabStartedRef.current = false;
-    setElapsed(0);
     setLocationState("idle");
     setLocationError("");
+    setSendPhase("idle");
+    setSilenceNotice("");
+    setTranscriptSource("typed");
+    setAudioLevels([18, 34, 52, 38, 24]);
+    setGuidanceImage({
+      status: "idle",
+      altText: "Simple emergency guidance with calm steps for the bystander.",
+      caption: "",
+    });
+    committedSpeechRef.current = "";
+    interimSpeechRef.current = "";
+    realtimeReconnectsRef.current = 0;
+  }
+
+  function addNewDetail() {
+    setStep("listen");
+    setSpeechState("idle");
+    setSilenceNotice("");
+    realtimeReconnectsRef.current = 0;
+    window.setTimeout(() => {
+      reportRef.current?.focus();
+      startSpeechCapture();
+    }, 80);
   }
 
   return (
-    <PulseShell
-      activeStep={step}
-      canOpenStep={canOpenStep}
-      elapsed={elapsed}
-      locationState={locationState}
-      onReset={reset}
-      onStepChange={openStep}
-    >
-      {step === "start" && (
-        <StartScreen
-          locationError={locationError}
-          locationState={locationState}
-          onStart={startPulse}
-        />
-      )}
-
-      {(step === "location" || step === "listen") && (
-        <LocationIntakeScreen
-          incidentLocation={incidentLocation}
-          locationError={locationError}
-          locationState={locationState}
-          micState={micState}
-          mode={step}
-          onProcess={() => submitCapturedReport()}
-          onRequestLocation={startPulse}
-          onRestartListening={startSpeechCapture}
-          report={report}
-          reportRef={reportRef}
-          setReport={setReport}
-          speechState={speechState}
-        />
-      )}
-
-      {step === "triage" && (
-        <TriageScreen
-          isProcessing={speechState === "processing" && !triageResult}
-          report={submittedReport}
-          triage={triage}
-        />
-      )}
-
-      {step === "hospitals" && (
-        <HospitalScreen
-          hospitals={hospitals}
-          incidentLocation={incidentLocation}
-          selectedHospital={selectedHospital}
-        />
-      )}
-
-      {step === "dispatch" && (
-        <DispatchScreen
-          dispatchCall={dispatchCall}
-          elapsed={elapsed}
-          events={visibleEvents}
-          hospitals={hospitals}
-          incidentLocation={incidentLocation}
-          report={submittedReport}
-          safetyLab={safetyLab}
-          safetyLabLoading={!safetyLab && safetyLabStartedRef.current}
-          selectedHospital={selectedHospital}
-          triage={triage}
-        />
-      )}
-    </PulseShell>
-  );
-}
-
-function PulseShell({
-  activeStep,
-  canOpenStep,
-  children,
-  elapsed,
-  locationState,
-  onReset,
-  onStepChange,
-}: {
-  activeStep: WorkflowStep;
-  canOpenStep: (step: WorkflowStep) => boolean;
-  children: React.ReactNode;
-  elapsed: number;
-  locationState: LocationState;
-  onReset: () => void;
-  onStepChange: (step: WorkflowStep) => void;
-}) {
-  return (
-    <main className="min-h-screen bg-[#081116] text-[#f8f4ec]">
-      <section className="mx-auto grid min-h-screen w-full max-w-[1540px] gap-4 p-3 md:p-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] flex-col rounded-2xl border border-white/10 bg-[rgba(13,23,29,0.86)] p-3 shadow-2xl shadow-black/30 backdrop-blur-xl lg:flex">
-          <BrandBlock />
-          <StepRail activeStep={activeStep} canOpenStep={canOpenStep} onStepChange={onStepChange} />
-          <div className="mt-auto space-y-3">
-            <SystemStatus locationState={locationState} />
-            <p className="px-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#8b98a5]">
-              Session {formatTime(elapsed)}
-            </p>
-          </div>
-        </aside>
-
-        <div className="flex min-h-[calc(100vh-1.5rem)] min-w-0 flex-col gap-4">
-          <header className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[rgba(13,23,29,0.88)] p-3 shadow-xl shadow-black/25 backdrop-blur-xl lg:hidden">
-            <BrandBlock compact />
-            <div className="flex items-center gap-2">
-              {activeStep !== "start" && (
-                <button
-                  type="button"
-                  onClick={onReset}
-                  className="rounded-lg border border-white/10 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#b6c0ca] transition hover:border-[#d92d38] hover:text-white"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </header>
-
-          <MobileStepper activeStep={activeStep} />
-
-          <section className="min-w-0 flex-1">{children}</section>
-
-          {activeStep !== "start" && (
+    <main className="min-h-screen bg-[#f7f3ec] text-[#15242d]">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 lg:px-8">
+        <header className="flex items-center justify-between gap-3 py-2">
+          <BrandHeader />
+          {step !== "start" && (
             <button
               type="button"
-              onClick={onReset}
-              className="fixed bottom-4 right-4 z-30 hidden rounded-xl border border-white/10 bg-[rgba(17,31,39,0.92)] px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-[#b6c0ca] shadow-2xl shadow-black/30 backdrop-blur transition hover:border-[#d92d38] hover:text-white lg:block"
+              onClick={reset}
+              className="min-h-11 rounded-full border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] shadow-sm transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
             >
-              Reset
+              Start new
             </button>
           )}
-        </div>
-      </section>
+        </header>
+
+        <section className="flex flex-1 items-center justify-center py-4">
+          {step === "start" && (
+            <StartScreen
+              locationError={locationError}
+              locationState={locationState}
+              onStart={startPulse}
+            />
+          )}
+
+          {step === "listen" && (
+            <ListeningScreen
+              audioLevels={audioLevels}
+              incidentLocation={incidentLocation}
+              locationError={locationError}
+              locationState={locationState}
+              micState={micState}
+              onProcess={() => prepareReportConfirmation()}
+              onRequestLocation={startPulse}
+              onRestartListening={startSpeechCapture}
+              report={report}
+              reportRef={reportRef}
+              silenceNotice={silenceNotice}
+              setReport={setReport}
+              speechState={speechState}
+            />
+          )}
+
+          {step === "confirm" && (
+            <ConfirmReportScreen
+              incidentLocation={incidentLocation}
+              onConfirm={() => submitCapturedReport()}
+              onFix={() => {
+                setStep("listen");
+                window.setTimeout(() => reportRef.current?.focus(), 80);
+              }}
+              report={report}
+              reportRef={reportRef}
+              setReport={(value) => {
+                setTranscriptSource("typed");
+                setReport(value);
+              }}
+              transcriptSource={transcriptSource}
+            />
+          )}
+
+	          {step === "sending" && (
+	            <SendingScreen
+                guidanceImage={guidanceImage}
+	              hospitals={hospitals}
+	              incidentLocation={incidentLocation}
+	              report={submittedReport}
+	              sendPhase={sendPhase}
+	              triage={triage}
+	            />
+	          )}
+
+          {step === "done" && (
+            <HelpNotifiedScreen
+              dispatchCall={dispatchCall}
+              guidanceImage={guidanceImage}
+              hospitals={hospitals}
+              incidentLocation={incidentLocation}
+              onAddDetail={addNewDetail}
+              onReset={reset}
+              sendPhase={sendPhase}
+              triage={triage}
+            />
+          )}
+        </section>
+      </div>
     </main>
   );
 }
 
-function BrandBlock({ compact = false }: { compact?: boolean }) {
+function BrandHeader() {
   return (
-    <div className={`flex items-center gap-3 ${compact ? "" : "px-1 pb-5"}`}>
-      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#d92d38] text-white shadow-lg shadow-[rgba(217,45,56,0.28)]">
-        <Siren className="size-5" />
+    <div className="flex items-center gap-3">
+      <span className="grid size-11 place-items-center rounded-2xl bg-[#d92d38] text-white shadow-lg shadow-[rgba(217,45,56,0.24)]">
+        <Siren className="size-6" />
+      </span>
+      <div>
+        <p className="text-lg font-black tracking-[0.2em] text-[#15242d]">PULSE</p>
+        <p className="text-xs font-bold text-[#6f7b84]">Emergency help</p>
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-lg font-black tracking-[0.28em] text-white">PULSE</p>
-        <p className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-[#8b98a5]">
-          Emergency
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function StepRail({
-  activeStep,
-  canOpenStep,
-  onStepChange,
-}: {
-  activeStep: WorkflowStep;
-  canOpenStep: (step: WorkflowStep) => boolean;
-  onStepChange: (step: WorkflowStep) => void;
-}) {
-  const currentIndex = stepIndex(activeStep);
-
-  return (
-    <nav className="grid gap-1">
-      {stepDefinitions.map((step, index) => {
-        const Icon = step.icon;
-        const active = step.id === activeStep;
-        const complete = index < currentIndex;
-        const disabled = !canOpenStep(step.id);
-        return (
-          <button
-            key={step.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onStepChange(step.id)}
-            className={`group flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
-              active
-                ? "border-[rgba(217,45,56,0.55)] bg-[rgba(217,45,56,0.13)] text-white"
-                : complete
-                  ? "border-transparent bg-[rgba(255,255,255,0.04)] text-[#b6c0ca] hover:border-white/10"
-                  : "border-transparent text-[#8b98a5] hover:border-white/10 hover:bg-white/[0.03]"
-            } ${disabled ? "opacity-45" : ""}`}
-          >
-            <span
-              className={`grid size-8 shrink-0 place-items-center rounded-lg border ${
-                active
-                  ? "border-[rgba(217,45,56,0.55)] bg-[#d92d38] text-white"
-                  : complete
-                    ? "border-[rgba(53,166,106,0.4)] bg-[rgba(53,166,106,0.13)] text-[#35a66a]"
-                    : "border-white/10 bg-white/[0.03] text-[#8b98a5]"
-              }`}
-            >
-              <Icon className="size-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-black">{step.label}</span>
-              <span className="block truncate text-[11px] font-semibold text-[#8b98a5]">{step.detail}</span>
-            </span>
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
-function MobileStepper({ activeStep }: { activeStep: WorkflowStep }) {
-  const activeIndex = stepIndex(activeStep);
-
-  return (
-    <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[rgba(13,23,29,0.7)] p-2 lg:hidden">
-      {stepDefinitions.map((step, index) => (
-        <div
-          key={step.id}
-          className={`flex min-w-fit items-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${
-            step.id === activeStep
-              ? "bg-[#d92d38] text-white"
-              : index < activeIndex
-                ? "bg-[rgba(53,166,106,0.13)] text-[#35a66a]"
-                : "bg-white/[0.04] text-[#8b98a5]"
-          }`}
-        >
-          <span>{index + 1}</span>
-          <span>{step.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SystemStatus({ locationState }: { locationState: LocationState }) {
-  const ready = locationState === "locked";
-  return (
-    <div className="rounded-xl border border-[rgba(53,166,106,0.24)] bg-[rgba(53,166,106,0.09)] p-3">
-      <div className="flex items-center gap-2 text-[#35a66a]">
-        <ShieldCheck className="size-4" />
-        <p className="text-xs font-black uppercase tracking-[0.12em]">
-          {ready ? "GPS verified" : "System normal"}
-        </p>
-      </div>
-      <p className="mt-1 text-[11px] font-semibold leading-4 text-[#8b98a5]">
-        All services operational. GPS is required before dispatch.
-      </p>
     </div>
   );
 }
@@ -1093,925 +1381,826 @@ function StartScreen({
   const isLocating = locationState === "locking";
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_420px]">
-      <Panel className="pulse-shell-grid min-h-[72vh] overflow-hidden p-5 sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-3xl">
-            <StatusPill icon={Activity} label="Autonomous emergency dispatch" tone="neutral" />
-            <h1 className="mt-8 max-w-3xl text-4xl font-black leading-[1.02] tracking-[-0.03em] text-white sm:text-7xl sm:leading-[0.95]">
-              One tap. One report. Dispatch starts.
-            </h1>
-            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#b6c0ca] sm:mt-6 sm:text-lg sm:leading-8">
-              Pulse locks live GPS, listens to the bystander, structures the emergency, ranks nearby hospitals, and routes a selected hospital scenario to the configured test receiver.
-            </p>
+    <div className="grid w-full max-w-5xl items-start gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.8fr)]">
+      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7 lg:p-8">
+	        <div className="inline-flex items-center gap-2 rounded-full bg-[#fff2f1] px-4 py-2 text-sm font-black text-[#a51d2a]">
+	          <ShieldCheck className="size-4" />
+	          Your first minute matters
+	        </div>
+	        <h1 className="mt-6 max-w-2xl text-4xl font-black leading-[0.98] tracking-normal text-[#15242d] sm:text-6xl">
+	          Start Emergency Help
+	        </h1>
+	        <p className="mt-4 max-w-xl text-base font-semibold leading-7 text-[#53616b] sm:text-lg sm:leading-8">
+	          Tell Pulse what happened. It will guide you now, share your location, and call for help.
+	        </p>
+	        <ImmediateActionsCard compact />
+
+        {locationError && (
+          <div className="mt-6 rounded-2xl border border-[#f4b5b7] bg-[#fff2f1] p-4">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[#d92d38]" />
+              <p className="text-sm font-bold leading-6 text-[#7b2a31]">{locationError}</p>
+            </div>
           </div>
-          <GpsStatusPill locationState={locationState} />
-        </div>
+        )}
 
-        <div className="mt-8 grid items-center gap-8 sm:mt-12 lg:grid-cols-[minmax(260px,0.55fr)_minmax(0,1fr)] lg:gap-10">
-          <button
-            type="button"
-            onClick={onStart}
-            disabled={isLocating}
-            className="pulse-orb mx-auto grid aspect-square w-44 place-items-center rounded-full border border-white/20 bg-[linear-gradient(145deg,#f44950,#9d1824)] text-center text-white shadow-2xl shadow-[rgba(217,45,56,0.45)] ring-[10px] ring-[rgba(217,45,56,0.16)] transition duration-300 hover:scale-[1.02] focus:outline-none focus:ring-[rgba(217,45,56,0.35)] disabled:scale-100 sm:w-64"
-          >
-            <span className="relative z-10 grid place-items-center gap-3">
-              {isLocating ? <Loader2 className="size-9 animate-spin" /> : <Activity className="size-9" />}
-              <span className="text-xl font-black uppercase leading-6 tracking-[0.04em] sm:text-2xl sm:leading-7">
-                {isLocating ? "Locking GPS" : "Start Pulse"}
-              </span>
-            </span>
-          </button>
+	        <button
+	          type="button"
+	          onClick={onStart}
+	          disabled={isLocating}
+	          className="mt-6 flex min-h-16 w-full items-center justify-center rounded-2xl bg-[#d92d38] text-center text-white shadow-xl shadow-[rgba(217,45,56,0.24)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-8 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6] sm:w-auto sm:px-8"
+	        >
+	          <span className="flex items-center justify-center gap-3 px-4">
+	            {isLocating ? <Loader2 className="size-6 animate-spin" /> : <PhoneCall className="size-6" />}
+	            <span className="text-base font-black leading-6 sm:text-lg">{isLocating ? "Getting location" : "Start Emergency Help"}</span>
+	          </span>
+	        </button>
+	      </section>
 
-          <div className="grid gap-4">
-            {locationError && (
-              <div className="rounded-2xl border border-[rgba(217,45,56,0.38)] bg-[rgba(217,45,56,0.12)] p-4">
-                <div className="flex items-center gap-2 text-[#d92d38]">
-                  <AlertTriangle className="size-5" />
-                  <p className="text-sm font-black uppercase tracking-[0.14em]">Location required</p>
-                </div>
-                <p className="mt-2 text-sm font-semibold leading-6 text-[#b6c0ca]">{locationError}</p>
-              </div>
-            )}
-            <Panel className="bg-[rgba(17,31,39,0.78)] p-4">
-              <p className="text-sm font-black text-white">What happens next</p>
-              <div className="mt-4 grid gap-3">
-                {[
-                  "Listen to the situation",
-                  "Capture live GPS",
-                  "Assess risk and guide you",
-                  "Route selected hospital scenario",
-                ].map((item, index) => (
-                  <div key={item} className="flex items-center gap-3 text-sm font-semibold text-[#b6c0ca]">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white text-xs font-black text-[#081116]">
-                      {index + 1}
-                    </span>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </Panel>
-            <Panel className="bg-[rgba(17,31,39,0.78)] p-4">
-              <div className="flex gap-3">
-                <Lock className="mt-1 size-5 shrink-0 text-[#b6c0ca]" />
-                <div>
-                  <p className="text-sm font-black text-white">Secure and private</p>
-                  <p className="mt-1 text-sm font-semibold leading-6 text-[#8b98a5]">
-                    Location is requested only when a Pulse session starts and is attached to the emergency package.
-                  </p>
-                </div>
-              </div>
-            </Panel>
-          </div>
-        </div>
-      </Panel>
+	      <section className="grid gap-4">
+	        <InfoCard icon={Crosshair} title="Location shared" detail="Pulse uses your current location so help knows where to go." />
+	        <InfoCard icon={Mic} title="Tell us what happened" detail="Speak or type. You can edit the report before sending it." />
+	        <InfoCard icon={ListChecks} title="Stay guided" detail="Pulse keeps the next steps visible while it calls for help." />
+	      </section>
+	    </div>
+	  );
+	}
 
-      <Panel className="p-5">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Live readiness</p>
-        <div className="mt-5 grid gap-3">
-          <ReadinessRow active={locationState === "locked"} icon={Crosshair} label="GPS location" />
-          <ReadinessRow active={false} icon={Mic} label="Voice transcript" />
-          <ReadinessRow active={false} icon={Stethoscope} label="AI triage" />
-          <ReadinessRow active={false} icon={Hospital} label="Hospital ranking" />
-          <ReadinessRow active={false} icon={PhoneCall} label="Test dispatch call" />
-        </div>
-      </Panel>
-    </div>
-  );
-}
-
-function LocationIntakeScreen({
+function ListeningScreen({
+  audioLevels,
   incidentLocation,
   locationError,
   locationState,
   micState,
-  mode,
   onProcess,
   onRequestLocation,
   onRestartListening,
   report,
   reportRef,
+  silenceNotice,
   setReport,
   speechState,
 }: {
+  audioLevels: number[];
   incidentLocation: IncidentLocation | null;
   locationError: string;
   locationState: LocationState;
   micState: MicState;
-  mode: "location" | "listen";
   onProcess: () => void;
   onRequestLocation: () => void;
   onRestartListening: () => void;
   report: string;
-  reportRef: React.RefObject<HTMLTextAreaElement | null>;
+  reportRef: RefObject<HTMLTextAreaElement | null>;
+  silenceNotice: string;
   setReport: (value: string) => void;
   speechState: SpeechState;
 }) {
-  const canProcess = report.trim().length >= 12;
   const locked = locationState === "locked" && incidentLocation;
-  const statusCopy =
-    locationState === "locking"
-      ? "Requesting precise GPS"
-      : !locked
-        ? "GPS required before intake"
-        : micState === "requesting"
-          ? "Requesting microphone"
-          : micState === "denied"
-            ? "Microphone blocked"
-            : speechState === "listening" || speechState === "idle"
-              ? "Listening now"
-              : speechState === "processing"
-                ? "Processing report"
-                : speechState === "unsupported"
-                  ? "Speech unavailable"
-                  : speechState === "error"
-                    ? "Microphone needs attention"
-                    : "Ready to listen";
+  const canProcess = report.trim().length >= 12;
+  const microphoneFallback = speechState === "unsupported" || speechState === "error" || micState === "denied" || micState === "unavailable";
+  const listenLabel =
+    micState === "requesting"
+      ? "Requesting microphone"
+      : speechState === "connecting"
+        ? "Connecting"
+      : speechState === "listening"
+        ? "Listening now"
+        : microphoneFallback
+          ? "Type what happened"
+          : "Ready";
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_380px]">
-      <Panel className="min-h-[72vh] p-5 sm:p-6">
+    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <StatusPill icon={mode === "location" ? Crosshair : Mic} label={mode === "location" ? "Location" : "Voice intake"} tone="red" />
-            <h1 className="mt-4 text-4xl font-black tracking-[-0.02em] text-white sm:text-5xl">
-              {locked ? "Tell us what happened." : "We need your location."}
+            <StatusBadge tone={speechState === "listening" || speechState === "connecting" ? "red" : microphoneFallback ? "warning" : "green"} icon={Mic} label={listenLabel} />
+            <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+              What happened?
             </h1>
-            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#8b98a5]">
-              {locked
-                ? "Speak clearly. Pulse will keep the transcript editable so you can correct it before triage."
-                : "Pulse uses real GPS to route hospital search and attach the incident location to dispatch context."}
+            <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+              Speak naturally. Pulse will show what it heard before anything is sent.
             </p>
           </div>
-          <GpsStatusPill location={incidentLocation} locationState={locationState} />
+          <LocationPill location={incidentLocation} locationState={locationState} />
         </div>
 
-        <Panel className="mt-6 bg-[rgba(17,31,39,0.72)] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className={`grid size-10 place-items-center rounded-xl ${locked ? "bg-[rgba(53,166,106,0.15)] text-[#35a66a]" : "bg-[rgba(217,45,56,0.15)] text-[#d92d38]"}`}>
-                {locationState === "locking" ? <Loader2 className="size-5 animate-spin" /> : <Navigation className="size-5" />}
-              </span>
-              <div>
-                <p className="text-sm font-black text-white">GPS lock</p>
-                <p className="text-xs font-semibold text-[#8b98a5]">
-                  {locked
-                    ? `${formatCoordinates(incidentLocation)}${incidentLocation.accuracy != null ? ` · ±${Math.round(incidentLocation.accuracy)}m` : ""}`
-                    : locationError || "Allow location access to continue."}
-                </p>
+        <div className="mt-6 rounded-[2rem] border border-[#f3b0b4] bg-[#fff2f1] p-5">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className={`pulse-orb grid size-24 shrink-0 place-items-center rounded-full text-white ${speechState === "listening" ? "" : "opacity-80"}`}>
+              {speechState === "connecting" || speechState === "processing" ? <Loader2 className="size-9 animate-spin" /> : <Mic className="size-10" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-black text-[#15242d]">
+                {speechState === "listening" ? "Listening now" : speechState === "connecting" ? "Getting the microphone ready" : microphoneFallback ? "Typing is okay" : "Ready when you are"}
+              </p>
+              <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">
+                {silenceNotice || "Say what you see: injury, breathing, bleeding, and where the person is."}
+              </p>
+              <div className="mt-4 flex h-12 items-center gap-2" aria-label="Microphone volume">
+                {audioLevels.map((level, index) => (
+                  <span
+                    key={index}
+                    className="pulse-wave-bar"
+                    style={{
+                      height: `${speechState === "listening" ? level : 16}px`,
+                      animationDelay: `${index * 110}ms`,
+                    }}
+                  />
+                ))}
               </div>
             </div>
-            {!locked && (
-              <button
-                type="button"
-                onClick={onRequestLocation}
-                disabled={locationState === "locking"}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#d92d38] px-4 py-3 text-sm font-black text-white transition hover:bg-[#a51d2a] disabled:bg-white/10 disabled:text-[#8b98a5]"
-              >
-                {locationState === "locking" ? <Loader2 className="size-4 animate-spin" /> : <Navigation className="size-4" />}
-                {locationState === "locking" ? "Locking GPS" : "Allow Location Access"}
-              </button>
-            )}
           </div>
-        </Panel>
+        </div>
 
-        <Panel className="mt-5 bg-[rgba(8,17,22,0.72)] p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className={`grid size-10 place-items-center rounded-xl ${speechState === "listening" ? "bg-[rgba(217,45,56,0.18)] text-[#d92d38]" : "bg-white/[0.05] text-[#8b98a5]"}`}>
-                <Mic className="size-5" />
-              </span>
-              <div>
-                <p className="text-sm font-black text-white">{statusCopy}</p>
-                <p className="text-xs font-semibold text-[#8b98a5]">Review the transcript before processing.</p>
-              </div>
-            </div>
-            <Waveform active={speechState === "listening"} />
+        {!locked && (
+          <div className="mt-6 rounded-2xl border border-[#f4b5b7] bg-[#fff2f1] p-4">
+            <p className="text-sm font-bold leading-6 text-[#7b2a31]">
+              {locationError || "Location is needed to send help to the right place."}
+            </p>
+            <button
+              type="button"
+              onClick={onRequestLocation}
+              disabled={locationState === "locking"}
+              className="mt-4 min-h-12 rounded-xl bg-[#d92d38] px-5 text-sm font-black text-white transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+            >
+              {locationState === "locking" ? "Getting location" : "Share my location"}
+            </button>
           </div>
+        )}
 
-          <label htmlFor="incident-report" className="mt-6 block text-xs font-black uppercase tracking-[0.16em] text-[#8b98a5]">
-            Live speech-to-text transcript
-          </label>
-          <textarea
-            ref={reportRef}
-            id="incident-report"
-            value={report}
-            onChange={(event) => setReport(event.target.value)}
-            placeholder={locked ? "Say what happened, where you are, and what you can see." : "GPS lock is required before voice intake starts."}
-            disabled={!locked || speechState === "processing"}
-            className="mt-3 min-h-72 w-full resize-none rounded-2xl border border-white/10 bg-[rgba(17,31,39,0.75)] p-5 text-xl font-bold leading-9 text-white outline-none transition placeholder:text-[#8b98a5] focus:border-[rgba(217,45,56,0.65)] focus:ring-4 focus:ring-[rgba(217,45,56,0.16)] disabled:text-[#8b98a5] sm:text-2xl"
-          />
-        </Panel>
+        {microphoneFallback && locked && (
+          <div className="mt-6 rounded-2xl border border-[#ecd8a8] bg-[#fff9ea] p-4">
+            <p className="text-sm font-bold leading-6 text-[#705616]">
+              You can type what happened. Pulse can still share your location and call for help.
+            </p>
+          </div>
+        )}
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <label htmlFor="incident-report" className="mt-7 block text-sm font-black text-[#53616b]">
+          I heard this
+        </label>
+        <textarea
+          ref={reportRef}
+          id="incident-report"
+          value={report}
+          onChange={(event) => setReport(event.target.value)}
+          placeholder={locked ? "Say or type what happened, where the person is, and what you can see." : "Share your location first."}
+          disabled={!locked || speechState === "processing"}
+          className="mt-3 min-h-72 w-full resize-none rounded-3xl border border-[#ded5c9] bg-[#fffaf3] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#9b9289] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:bg-[#efe9df] disabled:text-[#8d847b]"
+        />
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => reportRef.current?.focus()}
+            disabled={!locked}
+            className="min-h-14 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:text-[#aaa199]"
+          >
+            Type instead
+          </button>
           <button
             type="button"
             onClick={onRestartListening}
             disabled={!locked}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[0.03] px-5 text-sm font-black text-white transition hover:border-[#d92d38] disabled:text-[#8b98a5]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:text-[#aaa199]"
           >
             <RefreshCw className="size-4" />
-            Restart Listening
+            Restart listening
           </button>
           <button
             type="button"
             onClick={onProcess}
             disabled={!canProcess || speechState === "processing"}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.22)] transition hover:bg-[#a51d2a] disabled:bg-white/10 disabled:text-[#8b98a5]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
           >
             {speechState === "processing" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            {speechState === "processing" ? "Processing" : "Process Now"}
+            Check what I heard
           </button>
         </div>
-      </Panel>
+      </section>
 
-      <Panel className="p-5">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Capture readiness</p>
-        <div className="mt-5 grid gap-3">
-          <ReadinessRow active={Boolean(locked)} icon={Crosshair} label="GPS location ready" />
-          <ReadinessRow active={micState === "granted"} icon={Mic} label="Microphone granted" />
-          <ReadinessRow active={speechState === "listening"} icon={Radio} label="Speech recognition live" />
-          <ReadinessRow active={report.trim().length >= 12} icon={FileText} label="Report ready" />
-        </div>
-        {(speechState === "unsupported" || speechState === "error" || micState === "denied") && (
-          <div className="mt-5 rounded-2xl border border-[rgba(232,179,80,0.28)] bg-[rgba(232,179,80,0.1)] p-4">
-            <p className="text-sm font-semibold leading-6 text-[#b6c0ca]">
-              Microphone access is not active. The transcript box remains editable after GPS is locked.
-            </p>
-          </div>
-        )}
-      </Panel>
+	      <aside className="grid content-start gap-4">
+	        <ImmediateActionsCard />
+	        <SafetyCard />
+	        <LocationCard incidentLocation={incidentLocation} compact />
+	      </aside>
     </div>
   );
 }
 
-function TriageScreen({
-  isProcessing,
-  report,
-  triage,
-}: {
-  isProcessing: boolean;
-  report: string;
-  triage: TriageResult;
-}) {
-  return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <Panel className="min-h-[72vh] p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <StatusPill icon={Stethoscope} label="AI triage assessment" tone="red" />
-            <h1 className="mt-4 text-4xl font-black tracking-[-0.02em] text-white sm:text-5xl">
-              {isProcessing ? "Assessing the report." : triage.title}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#8b98a5]">
-              Pulse converts the bystander report into a focused emergency brief and immediate safety guidance.
-            </p>
-          </div>
-          <SourceBadge source={triage.source} />
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-[rgba(217,45,56,0.38)] bg-[linear-gradient(135deg,rgba(217,45,56,0.22),rgba(217,45,56,0.08))] p-5">
-          <div className="flex gap-4">
-            <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#d92d38] text-white">
-              <AlertTriangle className="size-7" />
-            </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[rgba(255,255,255,0.72)]">
-                {triage.severity} · get help now
-              </p>
-              <h2 className="mt-2 text-2xl font-black leading-tight text-white">{triage.warning}</h2>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <Panel className="bg-[rgba(17,31,39,0.72)] p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8b98a5]">Signals detected</p>
-            <div className="mt-4 grid gap-2">
-              {triage.signals.map((signal) => (
-                <div key={signal} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                  <CircleDot className="size-4 shrink-0 text-[#d92d38]" />
-                  <span className="text-sm font-bold text-[#b6c0ca]">{signal}</span>
-                </div>
-              ))}
-            </div>
-          </Panel>
-          <Panel className="bg-[rgba(17,31,39,0.72)] p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8b98a5]">Care route</p>
-            <h3 className="mt-4 text-2xl font-black leading-tight text-white">{triage.hospitalType}</h3>
-            <p className="mt-4 text-sm font-semibold leading-6 text-[#8b98a5]">{triage.dispatchBrief}</p>
-          </Panel>
-        </div>
-      </Panel>
-
-      <GuidancePanel actions={triage.actions} report={report} />
-    </div>
-  );
-}
-
-function HospitalScreen({
-  hospitals,
+function ConfirmReportScreen({
   incidentLocation,
-  selectedHospital,
-}: {
-  hospitals: HospitalCandidate[];
-  incidentLocation: IncidentLocation | null;
-  selectedHospital?: HospitalCandidate;
-}) {
-  const loading = hospitals.length === 0;
-  const fallbackMode = hospitals.some((hospital) => hospital.source === "fallback");
-
-  return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)]">
-      <Panel className="min-h-[72vh] p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <StatusPill icon={Hospital} label="Nearby hospitals" tone="red" />
-            <h1 className="mt-4 text-4xl font-black tracking-[-0.02em] text-white sm:text-5xl">
-              {loading ? "Finding emergency facilities." : "Hospitals ranked by distance."}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#8b98a5]">
-              Distances are computed from the locked GPS location. Fallback results are labeled when Google Places is unavailable.
-            </p>
-          </div>
-          {fallbackMode ? <SourceBadge source="fallback" /> : hospitals[0] ? <SourceBadge source={hospitals[0].source} /> : <StatusPill icon={Loader2} label="Searching" tone="neutral" />}
-        </div>
-
-        <div className="mt-6 grid gap-3">
-          {loading ? (
-            <LoadingPanel label="Searching hospitals around the GPS location" />
-          ) : (
-            hospitals.map((hospital, index) => (
-              <HospitalCard
-                key={hospital.id}
-                hospital={hospital}
-                index={index}
-                selected={hospital.id === selectedHospital?.id}
-              />
-            ))
-          )}
-        </div>
-      </Panel>
-
-      <AbstractRouteMap hospitals={hospitals} incidentLocation={incidentLocation} selectedHospital={selectedHospital} />
-    </div>
-  );
-}
-
-function DispatchScreen({
-  dispatchCall,
-  elapsed,
-  events,
-  hospitals,
-  incidentLocation,
+  onConfirm,
+  onFix,
   report,
-  safetyLab,
-  safetyLabLoading,
-  selectedHospital,
-  triage,
+  reportRef,
+  setReport,
+  transcriptSource,
 }: {
-  dispatchCall: DispatchCall;
-  elapsed: number;
-  events: Array<{ at: number; label: string }>;
-  hospitals: HospitalCandidate[];
   incidentLocation: IncidentLocation | null;
+  onConfirm: () => void;
+  onFix: () => void;
   report: string;
-  safetyLab: SafetyLabResult | null;
-  safetyLabLoading: boolean;
-  selectedHospital?: HospitalCandidate;
-  triage: TriageResult;
+  reportRef: RefObject<HTMLTextAreaElement | null>;
+  setReport: (value: string) => void;
+  transcriptSource: "live" | "final" | "typed";
 }) {
-  const outcome = getCallOutcome(dispatchCall);
+  const canConfirm = report.trim().length >= 12;
+  const sourceLabel =
+    transcriptSource === "final"
+      ? "Pulse cleaned up the wording from your voice."
+      : transcriptSource === "live"
+        ? "Pulse used the words it heard live."
+        : "You can edit this before Pulse sends it.";
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_430px]">
-      <section className="grid content-start gap-4">
-        <Panel className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <StatusPill icon={PhoneCall} label="Test dispatch call monitor" tone="red" />
-              <h1 className="mt-4 text-4xl font-black tracking-[-0.02em] text-white sm:text-5xl">
-                {dispatchCall.hospitalName || selectedHospital?.name || "Dispatch in progress."}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#8b98a5]">
-                Pulse calls the configured test receiver with selected hospital context. It does not dial the hospital directly.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-right">
-              <p className="font-mono text-4xl font-black text-white">{formatTime(elapsed)}</p>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8b98a5]">Session timer</p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            <CallInfoTile
-              icon={Headphones}
-              label="Test receiver"
-              title={dispatchCall.receivingPhone || "Configured receiver"}
-              badge="Test mode"
-            />
-            <CallInfoTile
-              icon={Hospital}
-              label="Selected hospital"
-              title={dispatchCall.hospitalName || selectedHospital?.name || "Selecting hospital"}
-              badge={selectedHospital ? `${selectedHospital.distanceKm} km` : "Pending"}
-            />
-            <CallStatusCard dispatchCall={dispatchCall} outcome={outcome} />
-          </div>
-        </Panel>
-
-        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <Panel className="p-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Live call transcript</p>
-              <SourceBadge source="test_receiver" />
-            </div>
-            <p className="mt-4 min-h-32 text-sm font-semibold leading-7 text-[#b6c0ca]">
-              {dispatchCall.transcript?.trim() ||
-                dispatchCall.summary?.trim() ||
-                `Pulse is placing a test-mode outbound call. ${triage.dispatchBrief} Bystander report: ${report}`}
-            </p>
-            {dispatchCall.callId && (
-              <p className="mt-4 truncate font-mono text-[11px] font-bold uppercase tracking-[0.08em] text-[#8b98a5]">
-                Call ID: {dispatchCall.callId}
-              </p>
-            )}
-          </Panel>
-
-          <Panel className="p-5">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Dispatch outcome</p>
-            <div
-              className={`mt-4 rounded-2xl border p-4 ${
-                outcome.tone === "success"
-                  ? "border-[rgba(53,166,106,0.35)] bg-[rgba(53,166,106,0.12)]"
-                  : outcome.tone === "danger"
-                    ? "border-[rgba(217,45,56,0.38)] bg-[rgba(217,45,56,0.12)]"
-                    : outcome.tone === "warning"
-                      ? "border-[rgba(232,179,80,0.32)] bg-[rgba(232,179,80,0.1)]"
-                      : "border-white/10 bg-white/[0.03]"
-              }`}
-            >
-              <p className="text-xl font-black text-white">{outcome.label}</p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-[#b6c0ca]">{outcome.detail}</p>
-            </div>
-            {selectedHospital?.phone && (
-              <p className="mt-4 text-xs font-semibold leading-5 text-[#8b98a5]">
-                Listed hospital phone from Google Places: <span className="font-mono text-[#b6c0ca]">{selectedHospital.phone}</span>. This number is context only.
-              </p>
-            )}
-          </Panel>
+    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
+        <StatusBadge tone="green" icon={CheckCircle2} label="Review first" />
+        <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+          This is what I heard.
+        </h1>
+        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+          If this looks right, Pulse will share your location and start calling for help.
+        </p>
+        <div className="mt-5 rounded-2xl border border-[#bfe4cf] bg-[#f0fbf4] p-4">
+          <p className="text-sm font-bold leading-6 text-[#1e7b4a]">{sourceLabel}</p>
         </div>
 
-        <GuidancePanel actions={triage.actions} report={report} compact />
+        <label htmlFor="confirmed-report" className="mt-7 block text-sm font-black text-[#53616b]">
+          What happened
+        </label>
+        <textarea
+          ref={reportRef}
+          id="confirmed-report"
+          value={report}
+          onChange={(event) => setReport(event.target.value)}
+          className="mt-3 min-h-72 w-full resize-none rounded-3xl border border-[#ded5c9] bg-[#fffaf3] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#9b9289] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+        />
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onFix}
+            className="min-h-14 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+          >
+            Fix it
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!canConfirm}
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+          >
+            <CheckCircle2 className="size-4" />
+            Looks right
+          </button>
+        </div>
       </section>
 
       <aside className="grid content-start gap-4">
-        <AbstractRouteMap hospitals={hospitals} incidentLocation={incidentLocation} selectedHospital={selectedHospital} compact />
-        <TimelinePanel events={events} />
-        <SafetyLabPanel loading={safetyLabLoading} result={safetyLab} />
+        <ImmediateActionsCard />
+        <LocationCard incidentLocation={incidentLocation} compact />
       </aside>
     </div>
   );
 }
 
-function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function SendingScreen({
+  guidanceImage,
+  hospitals,
+  incidentLocation,
+	  report,
+	  sendPhase,
+	  triage,
+	}: {
+    guidanceImage: InfographicResult;
+	  hospitals: HospitalCandidate[];
+	  incidentLocation: IncidentLocation | null;
+	  report: string;
+	  sendPhase: SendPhase;
+	  triage: TriageResult;
+	}) {
+  const currentIndex = phaseIndex(sendPhase);
+
   return (
-    <section className={`rounded-2xl border border-white/10 bg-[#0d171d] shadow-2xl shadow-black/25 ${className}`}>
-      {children}
-    </section>
+    <div className="w-full max-w-4xl rounded-[2rem] border border-[#e5ddd2] bg-white p-6 shadow-2xl shadow-[#ccbca8]/20 sm:p-8">
+      <StatusBadge tone="red" icon={PhoneCall} label="Sending now" />
+      <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+        Stay with them. Pulse is calling for help.
+      </h1>
+	      <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+	        Keep this screen open. Follow the simple steps below while Pulse shares the details.
+	      </p>
+	      <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
+
+	      <div className="mt-8 grid gap-3">
+        {statusSteps.map((step, index) => {
+          const active = currentIndex === index;
+          const complete = currentIndex > index;
+          return (
+            <div
+              key={step.phase}
+              className={`flex items-center gap-4 rounded-2xl border p-4 ${
+                active
+                  ? "border-[#f3b0b4] bg-[#fff2f1]"
+                  : complete
+                    ? "border-[#bfe4cf] bg-[#f0fbf4]"
+                    : "border-[#e5ddd2] bg-[#fffaf3]"
+              }`}
+            >
+              <span className={`grid size-10 place-items-center rounded-full ${complete ? "bg-[#35a66a] text-white" : active ? "bg-[#d92d38] text-white" : "bg-[#e8dfd2] text-[#6f7b84]"}`}>
+                {complete ? <CheckCircle2 className="size-5" /> : active ? <Loader2 className="size-5 animate-spin" /> : index + 1}
+              </span>
+              <p className="text-base font-black text-[#15242d]">{step.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <LocationCard incidentLocation={incidentLocation} compact />
+        <CareCandidateCard hospital={hospitals[0]} />
+      </div>
+
+      <div className="mt-4 rounded-3xl border border-[#e5ddd2] bg-[#fffaf3] p-5">
+        <p className="text-sm font-black text-[#53616b]">What happened</p>
+        <p className="mt-3 line-clamp-6 text-sm font-semibold leading-6 text-[#15242d]">{report}</p>
+      </div>
+    </div>
   );
 }
 
-function StatusPill({
+function HelpNotifiedScreen({
+  dispatchCall,
+  guidanceImage,
+  hospitals,
+  incidentLocation,
+  onAddDetail,
+  onReset,
+  sendPhase,
+  triage,
+}: {
+  dispatchCall: DispatchCall;
+  guidanceImage: InfographicResult;
+  hospitals: HospitalCandidate[];
+  incidentLocation: IncidentLocation | null;
+  onAddDetail: () => void;
+  onReset: () => void;
+  sendPhase: SendPhase;
+  triage: TriageResult;
+}) {
+	  const helpStatus = getHelpStatus(dispatchCall, sendPhase);
+	  const isFailure = helpStatus.tone === "danger";
+	  const coordinationTimeline = getCoordinationTimeline(dispatchCall, sendPhase);
+
+  return (
+    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
+        <StatusBadge tone={isFailure ? "danger" : "green"} icon={isFailure ? AlertTriangle : CheckCircle2} label={isFailure ? "Needs attention" : "Shared"} />
+        <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+          {helpStatus.title}
+        </h1>
+        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">{helpStatus.detail}</p>
+
+        <div className="mt-7 grid gap-4 md:grid-cols-2">
+          <LocationCard incidentLocation={incidentLocation} />
+          <CareCandidateCard hospital={hospitals[dispatchCall.hospitalIndex ?? 0] || hospitals[0]} />
+        </div>
+
+	        <CoordinationTimelinePanel items={coordinationTimeline} session={dispatchCall.coordinationSession} />
+
+        <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={onAddDetail}
+            className="min-h-14 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+          >
+            Add new detail
+          </button>
+          {incidentLocation && (
+            <a
+              href={getLocationUrl(incidentLocation)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+            >
+              <Navigation className="size-4" />
+              Show my location
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onReset}
+            className="min-h-14 rounded-2xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
+          >
+            Start new emergency
+          </button>
+        </div>
+      </section>
+
+      <aside className="grid content-start gap-4">
+        <SafetyCard />
+        <GuidanceMini actions={triage.doNow || triage.actions} />
+      </aside>
+    </div>
+  );
+}
+
+function InfoCard({ detail, icon: Icon, title }: { detail: string; icon: LucideIcon; title: string }) {
+  return (
+    <div className="rounded-3xl border border-[#e5ddd2] bg-white p-5 shadow-xl shadow-[#ccbca8]/15">
+      <span className="grid size-12 place-items-center rounded-2xl bg-[#fff2f1] text-[#d92d38]">
+        <Icon className="size-6" />
+      </span>
+      <h2 className="mt-4 text-xl font-black text-[#15242d]">{title}</h2>
+      <p className="mt-2 text-sm font-semibold leading-6 text-[#53616b]">{detail}</p>
+    </div>
+  );
+}
+
+function StatusBadge({
   icon: Icon,
   label,
   tone,
 }: {
   icon: LucideIcon;
   label: string;
-  tone: "neutral" | "red" | "green" | "warning";
+  tone: "green" | "red" | "warning" | "danger";
 }) {
-  const toneClass =
-    tone === "red"
-      ? "border-[rgba(217,45,56,0.32)] bg-[rgba(217,45,56,0.12)] text-[#ff8088]"
-      : tone === "green"
-        ? "border-[rgba(53,166,106,0.32)] bg-[rgba(53,166,106,0.12)] text-[#35a66a]"
+  const className =
+    tone === "green"
+      ? "bg-[#f0fbf4] text-[#1e7b4a]"
+      : tone === "danger"
+        ? "bg-[#fff2f1] text-[#a51d2a]"
         : tone === "warning"
-          ? "border-[rgba(232,179,80,0.32)] bg-[rgba(232,179,80,0.12)] text-[#e8b350]"
-          : "border-white/10 bg-white/[0.04] text-[#b6c0ca]";
+          ? "bg-[#fff9ea] text-[#816116]"
+          : "bg-[#fff2f1] text-[#a51d2a]";
 
   return (
-    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] ${toneClass}`}>
-      <Icon className="size-3.5" />
+    <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black ${className}`}>
+      <Icon className="size-4" />
       {label}
     </span>
   );
 }
 
-function SourceBadge({ source }: { source: SourceBadgeValue }) {
-  const labels: Record<SourceBadgeValue, string> = {
-    google_places: "Google Places",
-    fallback: "Fallback",
-    openai: "OpenAI",
-    local_fallback: "Local fallback",
-    adaption: "Adaption",
-    local: "Local",
-    gps: "GPS",
-    test_receiver: "Test receiver",
-  };
-  const tone =
-    source === "fallback" || source === "local_fallback" || source === "local"
-      ? "border-[rgba(232,179,80,0.32)] bg-[rgba(232,179,80,0.12)] text-[#e8b350]"
-      : source === "test_receiver"
-        ? "border-[rgba(217,45,56,0.32)] bg-[rgba(217,45,56,0.12)] text-[#ff8088]"
-        : "border-[rgba(53,166,106,0.32)] bg-[rgba(53,166,106,0.12)] text-[#35a66a]";
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] ${tone}`}>
-      <CheckCircle2 className="size-3.5" />
-      {labels[source]}
-    </span>
-  );
-}
-
-function GpsStatusPill({
+function LocationPill({
   location,
   locationState,
 }: {
-  location?: IncidentLocation | null;
+  location: IncidentLocation | null;
   locationState: LocationState;
 }) {
   if (locationState === "locked" && location) {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(53,166,106,0.32)] bg-[rgba(53,166,106,0.12)] px-3 py-2 text-xs font-black text-[#35a66a]">
+      <span className="inline-flex items-center gap-2 rounded-full bg-[#f0fbf4] px-4 py-2 text-sm font-black text-[#1e7b4a]">
         <MapPin className="size-4" />
-        GPS ready · ±{location.accuracy != null ? Math.round(location.accuracy) : "?"}m
+        Location shared
       </span>
     );
   }
 
   if (locationState === "locking") {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-[#b6c0ca]">
+      <span className="inline-flex items-center gap-2 rounded-full bg-[#fff9ea] px-4 py-2 text-sm font-black text-[#816116]">
         <Loader2 className="size-4 animate-spin" />
-        GPS locking
-      </span>
-    );
-  }
-
-  if (locationState === "unavailable") {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(217,45,56,0.36)] bg-[rgba(217,45,56,0.12)] px-3 py-2 text-xs font-black text-[#ff8088]">
-        <AlertTriangle className="size-4" />
-        GPS required
+        Getting location
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-[#8b98a5]">
-      <Crosshair className="size-4" />
-      GPS pending
+    <span className="inline-flex items-center gap-2 rounded-full bg-[#fff2f1] px-4 py-2 text-sm font-black text-[#a51d2a]">
+      <MapPin className="size-4" />
+      Location needed
     </span>
   );
 }
 
-function ReadinessRow({ active, icon: Icon, label }: { active: boolean; icon: LucideIcon; label: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-      <div className="flex items-center gap-3">
-        <span className={`grid size-8 place-items-center rounded-lg ${active ? "bg-[rgba(53,166,106,0.13)] text-[#35a66a]" : "bg-white/[0.04] text-[#8b98a5]"}`}>
-          <Icon className="size-4" />
-        </span>
-        <span className="text-sm font-bold text-[#b6c0ca]">{label}</span>
-      </div>
-      <span className={`size-2.5 rounded-full ${active ? "bg-[#35a66a]" : "bg-[#8b98a5]"}`} />
-    </div>
-  );
-}
-
-function Waveform({ active }: { active: boolean }) {
-  return (
-    <div className="flex h-12 items-center gap-1">
-      {Array.from({ length: 34 }).map((_, index) => (
-        <span
-          key={index}
-          className={`pulse-wave-bar ${active ? "" : "opacity-35 grayscale"}`}
-          style={{ animationDelay: `${index * 42}ms` }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function LoadingPanel({ label }: { label: string }) {
-  return (
-    <div className="flex min-h-52 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center">
-      <div>
-        <Loader2 className="mx-auto size-9 animate-spin text-[#d92d38]" />
-        <p className="mt-4 text-sm font-black text-white">{label}</p>
-        <p className="mt-1 text-xs font-semibold text-[#8b98a5]">Live data stays labeled by source.</p>
-      </div>
-    </div>
-  );
-}
-
-function GuidancePanel({
-  actions,
+function LocationCard({
   compact = false,
-  report,
-}: {
-  actions: string[];
-  compact?: boolean;
-  report: string;
-}) {
-  return (
-    <Panel className={`p-5 ${compact ? "" : "min-h-[72vh]"}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Guidance for you</p>
-          <h2 className="mt-2 text-2xl font-black text-white">Stay with the patient.</h2>
-        </div>
-        <ListChecks className="size-6 text-[#35a66a]" />
-      </div>
-      <div className="mt-5 grid gap-2">
-        {actions.map((action, index) => (
-          <div key={action} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[rgba(53,166,106,0.12)] text-xs font-black text-[#35a66a]">
-              {index + 1}
-            </span>
-            <p className="text-sm font-bold leading-5 text-[#b6c0ca]">{action}</p>
-          </div>
-        ))}
-      </div>
-      {!compact && report && (
-        <div className="mt-5 rounded-2xl border border-white/10 bg-[rgba(8,17,22,0.55)] p-4">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8b98a5]">Bystander report</p>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[#b6c0ca]">{report}</p>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-function HospitalCard({
-  hospital,
-  index,
-  selected,
-}: {
-  hospital: HospitalCandidate;
-  index: number;
-  selected: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-4 transition ${
-        selected
-          ? "border-[rgba(217,45,56,0.58)] bg-[rgba(217,45,56,0.11)]"
-          : "border-white/10 bg-white/[0.03]"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-3">
-          <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-sm font-black ${selected ? "bg-[#d92d38] text-white" : "bg-white/[0.06] text-[#b6c0ca]"}`}>
-            {index + 1}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-black text-white">{hospital.name}</p>
-            <p className="mt-1 truncate text-sm font-semibold text-[#8b98a5]">{hospital.address}</p>
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="font-mono text-lg font-black text-white">{hospital.distanceKm} km</p>
-          <SourceBadge source={hospital.source} />
-        </div>
-      </div>
-      {hospital.phone && (
-        <p className="mt-3 font-mono text-xs font-semibold text-[#8b98a5]">Listed phone: {hospital.phone}</p>
-      )}
-    </div>
-  );
-}
-
-function AbstractRouteMap({
-  compact = false,
-  hospitals,
   incidentLocation,
-  selectedHospital,
 }: {
   compact?: boolean;
-  hospitals: HospitalCandidate[];
   incidentLocation: IncidentLocation | null;
-  selectedHospital?: HospitalCandidate;
 }) {
-  const markers = hospitals.slice(0, compact ? 3 : 5);
-  const positions = [
-    { left: "68%", top: "36%" },
-    { left: "38%", top: "24%" },
-    { left: "32%", top: "62%" },
-    { left: "76%", top: "70%" },
-    { left: "52%", top: "52%" },
+  return (
+    <div className={`overflow-hidden rounded-3xl border border-[#e5ddd2] bg-white ${compact ? "p-4" : "p-5"}`}>
+      <div className="pulse-mini-map relative min-h-36 overflow-hidden rounded-2xl border border-[#e5ddd2] bg-[#edf4ef]">
+        <div className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#d92d38] text-white shadow-xl shadow-[rgba(217,45,56,0.28)]">
+          <MapPin className="size-7" />
+        </div>
+      </div>
+      <div className="mt-4 flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#f0fbf4] text-[#1e7b4a]">
+          <CheckCircle2 className="size-5" />
+        </span>
+        <div>
+          <p className="text-sm font-black text-[#15242d]">Your location was shared</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-[#53616b]">
+            {incidentLocation ? "Open your location if you need to guide someone nearby." : "Pulse is waiting for your location."}
+          </p>
+          {incidentLocation && (
+            <p className="mt-2 text-sm font-bold text-[#6f7b84]">{formatLocationLabel(incidentLocation)}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CareCandidateCard({ hospital }: { hospital?: HospitalCandidate }) {
+  return (
+    <div className="overflow-hidden rounded-3xl border border-[#e5ddd2] bg-white p-5">
+      <div className="flex items-start gap-3">
+        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#f0fbf4] text-[#1e7b4a]">
+          <Hospital className="size-6" />
+        </span>
+        <div>
+          <p className="text-sm font-black text-[#15242d]">Nearby emergency care</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-[#53616b]">
+            {hospital ? hospital.name : "Pulse is finding the nearest suitable emergency care."}
+          </p>
+          {hospital && (
+            <p className="mt-2 text-sm font-bold text-[#6f7b84]">
+              {hospital.travelTimeMinutes ? `${Math.round(hospital.travelTimeMinutes)} min drive` : `${hospital.distanceKm} km away`}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImmediateActionsCard({ compact = false }: { compact?: boolean }) {
+  const actions = [
+    { icon: Lock, title: "Make the area safe", detail: "Do not enter traffic, fire, water, or violence." },
+    { icon: HeartPulse, title: "Check breathing", detail: "Look for normal breathing and keep the airway clear." },
+    { icon: Ambulance, title: "Call local emergency services", detail: "Do this now if there is immediate danger or Pulse cannot confirm help." },
   ];
 
   return (
-    <Panel className={`overflow-hidden p-4 ${compact ? "min-h-[360px]" : "min-h-[72vh]"}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Distance view</p>
-          <h2 className="mt-2 text-2xl font-black text-white">Abstract route preview</h2>
-        </div>
-        <Route className="size-6 text-[#35a66a]" />
+    <div className={`rounded-3xl border border-[#f3b0b4] bg-[#fff2f1] ${compact ? "mt-5 p-4" : "p-5"}`}>
+      <div className="flex items-center gap-3">
+        <Siren className="size-5 text-[#d92d38]" />
+        <h2 className="text-lg font-black text-[#15242d]">Do this now</h2>
       </div>
-      <div className="pulse-route-map relative mt-5 min-h-[300px] overflow-hidden rounded-2xl border border-white/10">
-        <div className="pulse-route-line absolute left-[48%] top-[18%] h-[68%] w-1 -rotate-[18deg] rounded-full opacity-80" />
-        <div className="absolute bottom-4 left-4 rounded-2xl border border-white/10 bg-[rgba(8,17,22,0.82)] p-3 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <MapPin className="size-4 text-[#d92d38]" />
-            <p className="text-xs font-black text-white">Your location</p>
-          </div>
-          <p className="mt-1 font-mono text-[11px] text-[#8b98a5]">
-            {incidentLocation ? formatCoordinates(incidentLocation) : "Waiting for GPS"}
-          </p>
-        </div>
-        {markers.map((hospital, index) => (
-          <div
-            key={hospital.id}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 ${hospital.id === selectedHospital?.id ? "z-10" : ""}`}
-            style={positions[index]}
-          >
-            <div
-              className={`grid size-12 place-items-center rounded-full border text-sm font-black shadow-xl ${
-                hospital.id === selectedHospital?.id
-                  ? "border-[rgba(53,166,106,0.85)] bg-[#35a66a] text-white shadow-[rgba(53,166,106,0.28)]"
-                  : "border-white/10 bg-[rgba(17,31,39,0.92)] text-[#b6c0ca]"
-              }`}
-            >
-              {index + 1}
+      <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-1"}`}>
+        {actions.map(({ detail, icon: Icon, title }) => (
+          <div key={title} className="flex gap-3 rounded-2xl bg-white p-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#d92d38] text-white">
+              <Icon className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-black leading-5 text-[#15242d]">{title}</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-[#53616b]">{detail}</p>
             </div>
-            <p className="mt-2 hidden max-w-36 rounded-lg bg-[rgba(8,17,22,0.78)] px-2 py-1 text-center text-[10px] font-black text-white backdrop-blur sm:block">
-              {hospital.distanceKm} km
-            </p>
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs font-semibold leading-5 text-[#8b98a5]">
-        This is a visual route summary, not a live map. Hospital ranking uses real GPS distance from the locked location.
-      </p>
-    </Panel>
-  );
-}
-
-function CallInfoTile({
-  badge,
-  icon: Icon,
-  label,
-  title,
-}: {
-  badge: string;
-  icon: LucideIcon;
-  label: string;
-  title: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-white/[0.05] text-[#b6c0ca]">
-          <Icon className="size-5" />
-        </span>
-        <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#8b98a5]">
-          {badge}
-        </span>
-      </div>
-      <p className="mt-4 text-xs font-black uppercase tracking-[0.16em] text-[#8b98a5]">{label}</p>
-      <p className="mt-2 truncate text-lg font-black text-white">{title}</p>
     </div>
   );
 }
 
-function CallStatusCard({
-  dispatchCall,
-  outcome,
+function CoordinationTimelinePanel({
+  items,
+  session,
 }: {
-  dispatchCall: DispatchCall;
-  outcome: ReturnType<typeof getCallOutcome>;
+  items: CoordinationTimelineItem[];
+  session?: CoordinationSession;
 }) {
-  const statusLabel =
-    dispatchCall.status === "failed"
-      ? "Failed"
-      : dispatchCall.status === "ended"
-        ? "Ended"
-        : dispatchCall.status === "in-progress"
-          ? "Connected"
-          : dispatchCall.status === "ringing"
-            ? "Ringing"
-            : dispatchCall.status === "queued"
-              ? "Queued"
-              : dispatchCall.status === "starting"
-                ? "Starting"
-                : "Waiting";
-  const tone =
-    outcome.tone === "success"
-      ? "border-[rgba(53,166,106,0.36)] bg-[rgba(53,166,106,0.12)] text-[#35a66a]"
-      : outcome.tone === "danger"
-        ? "border-[rgba(217,45,56,0.38)] bg-[rgba(217,45,56,0.12)] text-[#ff8088]"
-        : "border-[rgba(232,179,80,0.32)] bg-[rgba(232,179,80,0.1)] text-[#e8b350]";
-
   return (
-    <div className={`rounded-2xl border p-4 ${tone}`}>
+    <div className="mt-6 rounded-[2rem] border border-[#e5ddd2] bg-[#fffaf3] p-5">
       <div className="flex items-center justify-between gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-black/20">
-          <Radio className="size-5" />
-        </span>
-        <span className="text-xs font-black uppercase tracking-[0.16em]">{statusLabel}</span>
+        <div>
+          <p className="text-sm font-black text-[#d92d38]">Help progress</p>
+          <h2 className="mt-1 text-2xl font-black text-[#15242d]">What Pulse is doing.</h2>
+        </div>
+        <Radio className="size-7 text-[#35a66a]" />
       </div>
-      <p className="mt-4 text-xs font-black uppercase tracking-[0.16em] opacity-80">Call status</p>
-      <p className="mt-2 text-lg font-black text-white">{outcome.label}</p>
-    </div>
-  );
-}
 
-function TimelinePanel({ events }: { events: Array<{ at: number; label: string }> }) {
-  return (
-    <Panel className="p-5">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Call timeline</p>
-      <div className="mt-4 grid gap-3">
-        {dispatchSchedule.map((event) => {
-          const visible = events.some((item) => item.label === event.label);
+      <div className="mt-5 grid gap-3">
+        {items.map((item) => {
+          const isDone = item.state === "done";
+          const needsAttention = item.state === "attention";
           return (
-            <div key={event.label} className="flex items-center gap-3">
-              <span className={`grid size-8 place-items-center rounded-full border ${visible ? "border-[rgba(53,166,106,0.4)] bg-[rgba(53,166,106,0.13)] text-[#35a66a]" : "border-white/10 bg-white/[0.03] text-[#8b98a5]"}`}>
-                {visible ? <CheckCircle2 className="size-4" /> : <Clock3 className="size-4" />}
+            <div key={item.id} className="flex items-center gap-4 rounded-3xl border border-[#e5ddd2] bg-white p-4">
+              <span
+                className={`grid size-10 shrink-0 place-items-center rounded-2xl ${
+                  isDone
+                    ? "bg-[#35a66a] text-white"
+                    : needsAttention
+                      ? "bg-[#fff2f1] text-[#d92d38]"
+                      : "bg-[#fff9ea] text-[#816116]"
+                }`}
+              >
+                {isDone ? <CheckCircle2 className="size-5" /> : needsAttention ? <AlertTriangle className="size-5" /> : <Loader2 className="size-5 animate-spin" />}
               </span>
-              <div className="min-w-0 flex-1">
-                <p className={`truncate text-sm font-bold ${visible ? "text-white" : "text-[#8b98a5]"}`}>{event.label}</p>
-                <p className="font-mono text-[11px] text-[#8b98a5]">{visible ? formatTime(event.at) : "--:--"}</p>
+              <div>
+                <p className="text-sm font-black text-[#15242d]">{item.label}</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-[#53616b]">{item.detail}</p>
               </div>
             </div>
           );
         })}
       </div>
-    </Panel>
-  );
-}
 
-function SafetyLabPanel({
-  loading,
-  result,
-}: {
-  loading: boolean;
-  result: SafetyLabResult | null;
-}) {
-  const statusLabel = loading
-    ? "Syncing"
-    : result?.source === "adaption" && result.status === "running"
-      ? "Run started"
-      : result?.source === "adaption"
-        ? "Adaption ready"
-        : result?.status === "failed"
-          ? "Local fallback"
-          : "Ready";
-  const scenarios = result?.scenarios.slice(0, 2) ?? [];
-
-  return (
-    <Panel className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8b98a5]">Safety lab</p>
-          <h3 className="mt-2 text-xl font-black leading-tight text-white">Emergency eval dataset</h3>
-        </div>
-        <SourceBadge source={result?.source || "local"} />
-      </div>
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <MetricTile label="Cases" value={loading ? "..." : String(result?.rowCount ?? 8)} />
-        <MetricTile label="Credits" value={result?.estimatedCredits != null ? `${result.estimatedCredits}` : loading ? "..." : "0"} />
-        <MetricTile label="Minutes" value={result?.estimatedMinutes != null ? `${result.estimatedMinutes}` : loading ? "..." : "0"} />
-      </div>
-      <p className="mt-3 text-sm font-semibold leading-5 text-[#8b98a5]">
-        {loading
-          ? "Uploading emergency edge cases without blocking dispatch."
-          : result?.note || `${statusLabel}. Emergency edge cases are ready.`}
-      </p>
-      {scenarios.length > 0 && (
-        <div className="mt-3 grid gap-2">
-          {scenarios.map((scenario) => (
-            <div key={scenario.transcript} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-              <p className="truncate text-xs font-black text-white">{scenario.transcript}</p>
-              <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.08em] text-[#8b98a5]">
-                {scenario.expectedType} · {scenario.expectedRoute}
-              </p>
+      {session && (
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-3xl border border-[#e5ddd2] bg-white p-4">
+            <p className="text-sm font-black text-[#15242d]">What Pulse asked</p>
+            <div className="mt-3 grid gap-2">
+              {session.facilityQuestions.map((question) => {
+                const response = session.facilityResponses.find((item) => item.questionId === question.id);
+                return (
+                  <div key={question.id} className="rounded-2xl bg-[#f7f3ec] px-4 py-3">
+                    <p className="text-sm font-bold leading-5 text-[#15242d]">{question.label}</p>
+                    <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#6f7b84]">
+                      {response?.status === "yes" ? "Confirmed" : response?.status === "no" ? "Unavailable" : response?.status === "unknown" ? "Not confirmed" : "Pending"}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          </div>
+
+          <div className="rounded-3xl border border-[#e5ddd2] bg-white p-4">
+            <p className="text-sm font-black text-[#15242d]">Who Pulse can call</p>
+            <div className="mt-3 grid gap-2">
+              {session.contactTargets.slice(0, 4).map((target) => (
+                <div key={target.id} className="rounded-2xl bg-[#f7f3ec] px-4 py-3">
+                  <p className="text-sm font-bold leading-5 text-[#15242d]">{target.name}</p>
+                  <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#6f7b84]">
+                    {target.status === "selected" ? "Calling first" : target.status === "queued" ? "Ready next" : target.status === "manual_required" ? "Call manually if needed" : "Not connected yet"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
-    </Panel>
+    </div>
   );
 }
 
-function MetricTile({ label, value }: { label: string; value: string }) {
+function SafetyCard() {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#8b98a5]">{label}</p>
-      <p className="mt-1 text-lg font-black text-white">{value}</p>
+    <div className="rounded-3xl border border-[#e5ddd2] bg-white p-5 shadow-xl shadow-[#ccbca8]/15">
+      <div className="flex gap-3">
+        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#fff2f1] text-[#d92d38]">
+          <Lock className="size-5" />
+        </span>
+        <div>
+          <h2 className="text-lg font-black text-[#15242d]">Stay safe first</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[#53616b]">
+            Do not enter danger to help. Move only if the area is unsafe.
+          </p>
+        </div>
+      </div>
     </div>
   );
+}
+
+function FirstAidInfographic({
+  guidanceImage,
+  triage,
+}: {
+  guidanceImage: InfographicResult;
+  triage: TriageResult;
+}) {
+  const doNow = (triage.doNow?.length ? triage.doNow : triage.actions).slice(0, 4);
+  const doNotDo = (triage.doNotDo?.length ? triage.doNotDo : ["Do not move them unless there is danger", "Do not give food or drink", "Do not crowd around them"]).slice(0, 3);
+  const watchFor = (triage.watchFor?.length ? triage.watchFor : ["Breathing changes", "Heavy bleeding", "Confusion or fainting"]).slice(0, 3);
+  const enrichedSteps = doNow.slice(0, 3).map((action) => ({
+    title: normalizeAction(action),
+    detail: getActionDetail(action, "Stay calm and keep following the steps."),
+  }));
+
+  return (
+    <div className="mt-7 rounded-[2rem] border border-[#e5ddd2] bg-[#fffaf3] p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-[#d92d38]">Do this now</p>
+          <h2 className="mt-1 text-2xl font-black text-[#15242d]">{triage.situationSummary || "Stay with the person."}</h2>
+        </div>
+        {guidanceImage.status === "loading" ? <Loader2 className="size-7 animate-spin text-[#35a66a]" /> : <ImageIcon className="size-7 text-[#35a66a]" />}
+      </div>
+
+      <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#e5ddd2] bg-white">
+        {guidanceImage.imageDataUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={guidanceImage.imageDataUrl}
+            alt={guidanceImage.altText}
+            className="aspect-[16/10] w-full object-cover"
+          />
+        ) : (
+          <div className="grid min-h-64 gap-3 bg-[#f0fbf4] p-4 md:grid-cols-3">
+            {enrichedSteps.map((step, index) => {
+              const Icon = getActionIcon(step.title);
+              return (
+                <div key={step.title} className="flex flex-col justify-between rounded-3xl border border-[#d7ebdf] bg-white p-4">
+                  <span className="grid size-14 place-items-center rounded-2xl bg-[#fff2f1] text-[#d92d38]">
+                    <Icon className="size-8" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-normal text-[#35a66a]">Step {index + 1}</p>
+                    <h3 className="mt-2 text-xl font-black leading-6 text-[#15242d]">{step.title}</h3>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-[#53616b]">{step.detail}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 text-sm font-bold leading-6 text-[#53616b]">
+        {guidanceImage.status === "loading" ? "A simple picture guide is loading. The steps below are ready now." : guidanceImage.caption || "Use these simple steps now."}
+      </p>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <GuidanceList title="Do" tone="green" items={doNow} />
+        <GuidanceList title="Don't" tone="red" items={doNotDo} />
+        <GuidanceList title="Watch" tone="warning" items={watchFor} />
+      </div>
+    </div>
+  );
+}
+
+function GuidanceList({
+  items,
+  title,
+  tone,
+}: {
+  items: string[];
+  title: string;
+  tone: "green" | "red" | "warning";
+}) {
+  const className =
+    tone === "green"
+      ? "border-[#bfe4cf] bg-[#f0fbf4] text-[#1e7b4a]"
+      : tone === "warning"
+        ? "border-[#ecd8a8] bg-[#fff9ea] text-[#816116]"
+        : "border-[#f3b0b4] bg-[#fff2f1] text-[#a51d2a]";
+
+  return (
+    <div className={`rounded-3xl border p-4 ${className}`}>
+      <p className="text-sm font-black">{title}</p>
+      <div className="mt-3 grid gap-2">
+        {items.map((item) => (
+          <p key={item} className="rounded-2xl bg-white/75 px-3 py-2 text-sm font-bold leading-5 text-[#15242d]">
+            {normalizeAction(item)}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GuidanceMini({ actions }: { actions: string[] }) {
+  return (
+    <div className="rounded-3xl border border-[#e5ddd2] bg-white p-5 shadow-xl shadow-[#ccbca8]/15">
+      <div className="flex items-center gap-3">
+        <FileText className="size-5 text-[#d92d38]" />
+        <h2 className="text-lg font-black text-[#15242d]">Keep doing this</h2>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {actions.slice(0, 4).map((action) => (
+          <div key={action} className="rounded-2xl bg-[#f7f3ec] px-4 py-3 text-sm font-bold leading-5 text-[#53616b]">
+            {normalizeAction(action)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function normalizeAction(action: string) {
+  return action
+    .replace(/\bhim\b/gi, "them")
+    .replace(/\bpatient\b/gi, "person")
+    .replace(/^Stop people from moving them$/i, "Keep them still");
+}
+
+function getActionIcon(action: string) {
+  if (/bleed|press|pressure|cloth|wound/i.test(action)) return Hand;
+  if (/breath|pulse|cpr|airway|heart/i.test(action)) return HeartPulse;
+  if (/watch|awake|monitor|check/i.test(action)) return Eye;
+  if (/space|responder|ambulance|clear/i.test(action)) return Ambulance;
+  return Lock;
+}
+
+function getActionDetail(action: string, fallback: string) {
+  if (/cpr/i.test(action)) return "Use hands-only CPR if they are not breathing normally.";
+  if (/breath|airway|pulse/i.test(action)) return "Keep checking breathing and keep the airway clear.";
+  if (/bleed|press|pressure|cloth|wound/i.test(action)) return "Use cloth or clothing and press firmly.";
+  if (/awake|monitor|watch|check/i.test(action)) return "Stay close and keep checking for changes.";
+  if (/space|responder|ambulance|clear/i.test(action)) return "Move people back so responders can reach them.";
+  if (/still|move/i.test(action)) return "Do not move them unless there is danger.";
+  return fallback;
 }

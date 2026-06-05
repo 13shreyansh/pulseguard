@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --pulse-bg: #081116;
-  --pulse-bg-soft: #0a141a;
-  --pulse-panel: #0d171d;
-  --pulse-panel-elevated: #111f27;
-  --pulse-panel-soft: #13242d;
-  --pulse-border: rgba(255, 255, 255, 0.1);
-  --pulse-border-strong: rgba(255, 255, 255, 0.18);
-  --pulse-text: #f8f4ec;
-  --pulse-muted: #8b98a5;
-  --pulse-muted-strong: #b6c0ca;
+  --pulse-bg: #f7f3ec;
+  --pulse-bg-soft: #fffaf3;
+  --pulse-panel: #ffffff;
+  --pulse-panel-elevated: #ffffff;
+  --pulse-panel-soft: #fffaf3;
+  --pulse-border: #e5ddd2;
+  --pulse-border-strong: #d8d0c4;
+  --pulse-text: #15242d;
+  --pulse-muted: #6f7b84;
+  --pulse-muted-strong: #53616b;
   --pulse-red: #d92d38;
   --pulse-red-deep: #a51d2a;
   --pulse-red-soft: rgba(217, 45, 56, 0.16);
@@ -35,18 +35,13 @@
 
 html {
   min-width: 320px;
-  background:
-    radial-gradient(circle at 30% 10%, rgba(217, 45, 56, 0.12), transparent 30rem),
-    radial-gradient(circle at 85% 20%, rgba(53, 166, 106, 0.09), transparent 28rem),
-    var(--pulse-bg);
+  background: var(--pulse-bg);
 }
 
 body {
   min-width: 320px;
   overflow-x: hidden;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 28rem),
-    var(--pulse-bg);
+  background: var(--pulse-bg);
   color: var(--pulse-text);
   font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
 }
@@ -70,10 +65,7 @@ button:disabled {
 }
 
 .pulse-shell-grid {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 44px 44px;
+  background: #ffffff;
 }
 
 .pulse-orb {
@@ -129,6 +121,16 @@ button:disabled {
 .pulse-route-line {
   background: linear-gradient(180deg, rgba(53, 166, 106, 0.95), rgba(217, 45, 56, 0.65));
   filter: drop-shadow(0 0 12px rgba(53, 166, 106, 0.32));
+}
+
+.pulse-mini-map {
+  background:
+    linear-gradient(35deg, transparent 46%, rgba(53, 166, 106, 0.28) 47%, rgba(53, 166, 106, 0.28) 53%, transparent 54%),
+    linear-gradient(145deg, transparent 45%, rgba(217, 45, 56, 0.16) 46%, rgba(217, 45, 56, 0.16) 52%, transparent 53%),
+    linear-gradient(rgba(21, 36, 45, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(21, 36, 45, 0.07) 1px, transparent 1px),
+    #edf4ef;
+  background-size: auto, auto, 34px 34px, 34px 34px, auto;
 }
 
 @keyframes pulse-wave {

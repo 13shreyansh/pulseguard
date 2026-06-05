@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 type SafetyScenario = {
   transcript: string;
@@ -140,7 +140,17 @@ async function adaptionFetch(path: string, init: RequestInit = {}) {
   });
 }
 
-export async function POST() {
+function hasOpsAccess(request: NextRequest) {
+  const token = process.env.PULSE_OPS_TOKEN;
+  if (!token) return process.env.NODE_ENV !== "production";
+  return request.headers.get("authorization") === `Bearer ${token}`;
+}
+
+export async function POST(request: NextRequest) {
+  if (!hasOpsAccess(request)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   if (cachedResult) {
     return NextResponse.json({
       ...cachedResult,

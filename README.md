@@ -5,45 +5,50 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vercel](https://img.shields.io/badge/Deploy-Vercel-000000?style=for-the-badge&logo=vercel)](https://vercel.com/)
 
-Pulse is a real-time emergency dispatch prototype for the first critical minute after an incident. It captures a bystander report, requires the browser's live GPS position, classifies the emergency, finds nearby hospitals from Google Places, and routes a Vapi test-mode call to a configured receiver with the selected hospital context.
+Pulse is an emergency coordination app for the first critical minute after an incident. It captures a bystander report, requires live GPS, classifies the emergency, shows immediate bystander guidance, ranks nearby hospital candidates, sends the GPS/map incident brief by message, and starts a sequential facility-coordination call through the configured Pulse demo line.
 
 Live app: [https://pulse-beta-two.vercel.app](https://pulse-beta-two.vercel.app)
 
 ## What It Does
 
 1. The bystander presses `Start Pulse`.
-2. Pulse requests browser GPS with high accuracy enabled.
-3. If location permission is denied or times out, the intake flow stays blocked with a clear location-required message.
-4. The browser listens with Web Speech API speech recognition, with an editable transcript fallback.
-5. The transcript is sent to the triage API for structured emergency classification and bystander guidance.
-6. `/api/hospitals` searches Google Places around the actual GPS coordinates and ranks hospitals by computed distance.
-7. Pulse selects a hospital candidate and calls `PULSE_RECEIVING_PHONE`, the configured test receiver.
-8. The Vapi assistant clearly states that the call is a test-mode call for the selected hospital scenario.
-9. Pulse polls Vapi for call status, transcript, summary, and acceptance or rejection language.
-10. If the receiver rejects the scenario, Pulse attempts the next selected hospital candidate.
-11. The safety-lab route syncs an emergency evaluation dataset to Adaption Labs when configured, or returns a visible local result.
+2. Pulse requests precise browser GPS.
+3. Pulse starts OpenAI Realtime transcription over WebRTC and keeps the transcript editable.
+4. The transcript is sent to the triage API for structured emergency classification and immediate bystander guidance.
+5. `/api/hospitals` searches Google Places around the GPS location and ranks candidates by travel time when available, distance, facility signal, phone availability, and confidence.
+6. Pulse builds one coordination session with contact targets, facility questions, call attempts, bystander guidance, selected destination, and a handoff timeline.
+7. Pulse sends the incident package by SMS or message webhook to the configured coordination line.
+8. Pulse places one real Vapi call for the first selected hospital candidate through the configured demo line, asking facility availability and ambulance-handoff questions.
+9. Pulse polls Vapi for call status, transcript, summary, and handoff evidence.
+
+Hackathon v1 is intentionally sequential because only one number is configured. Pulse does not claim a hospital accepted the patient unless the call evidence confirms acceptance. If acceptance is not confirmed, the UI tells the bystander to call local emergency services and marks the handoff as unresolved.
 
 ## Current Stack
 
 - **Framework:** Next.js App Router
 - **UI:** React 19, TypeScript, Tailwind CSS v4
-- **Speech:** Browser Web Speech API / `webkitSpeechRecognition`
+- **Speech:** OpenAI Realtime transcription over WebRTC
 - **Location:** Browser `navigator.geolocation`
-- **Triage:** OpenAI API, with explicit local fallback
-- **Hospital Search:** Google Places Nearby Search, with explicit fallback data
-- **Dispatch Calls:** Vapi outbound call API, routed to `PULSE_RECEIVING_PHONE`
-- **Safety Evaluation:** Adaption Labs API, with explicit local fallback
+- **Triage:** OpenAI API with local conservative logic for resilience
+- **Hospital Search:** Google Places Nearby Search plus Distance Matrix travel-time enrichment when available
+- **Messaging:** Twilio SMS or a configured HTTPS message webhook to the coordination line
+- **Dispatch Calls:** Vapi outbound call API routed to `PULSE_COORDINATION_PHONE` / `PULSE_OPERATOR_PHONE`
+- **Internal Evaluation:** Adaption Labs route remains available as an internal QA endpoint only
 - **Deployment:** Vercel
 
 ## API Surface
 
 | Route | Purpose |
 | --- | --- |
-| `POST /api/triage` | Classifies the incident with OpenAI and returns structured emergency guidance. Fallback triage is marked `local_fallback`. |
-| `GET /api/hospitals?lat={lat}&lng={lng}` | Searches Google Places near the provided GPS coordinates. Missing or invalid coordinates return `400`. |
-| `POST /api/dispatch/call` | Starts a Vapi call to the configured test receiver, not directly to the hospital phone number. |
-| `GET /api/dispatch/status` | Polls Vapi for call status, transcript, summary, and end reason. |
-| `POST /api/adaption/safety-lab` | Uploads or simulates an emergency safety-eval dataset through Adaption Labs. |
+| `POST /api/realtime/session` | Creates an ephemeral OpenAI Realtime transcription session for browser audio. |
+| `POST /api/speech/finalize` | Runs a higher-accuracy final transcription pass over the captured browser audio. |
+| `POST /api/triage` | Classifies the incident with OpenAI and returns structured emergency guidance. |
+| `POST /api/guidance/infographic` | Generates a calm pictorial bystander guide, with safe fallback UI if image generation is unavailable. |
+| `GET /api/hospitals?lat={lat}&lng={lng}` | Searches and ranks nearby hospital candidates from the provided GPS coordinates. |
+| `POST /api/dispatch/call` | Sends the coordination brief, starts the sequential Vapi call, and returns a `coordinationSession`. |
+| `GET /api/dispatch/status` | Polls Vapi/Twilio for call status, transcript, summary, handoff status, and facility-response evidence. |
+| `GET /api/config/health` | Returns integration readiness labels for the app shell. |
+| `POST /api/adaption/safety-lab` | Internal emergency evaluation dataset route. Not shown in the user flow. |
 
 ### Hospital Search Contract
 
@@ -72,25 +77,26 @@ Response shape:
     address: string;
     phone?: string;
     distanceKm: number;
-    source: "google_places" | "fallback";
+    travelTimeMinutes?: number;
+    score: number;
+    confidence: "high" | "medium" | "low";
+    rankingReason: string;
+    mapsUrl: string;
+    source: "google_places";
   }>;
-  source: "google_places" | "fallback";
+  source: "google_places" | "unavailable";
   warning?: string;
 }
 ```
 
-## Real Data And Fallbacks
-
-Pulse now separates live data from fallback data instead of presenting demo data as real:
+## Production Truth
 
 - GPS is required before intake starts.
-- Hospital search uses the user's real GPS coordinates.
-- Hospital distances are computed from the current GPS location.
-- Google Places results are marked `google_places`.
-- Hospital fallback results are marked `fallback` and shown with a visible fallback badge.
-- Triage fallback results are marked `local_fallback`.
-- Safety-lab local results are marked `local`.
-- Dispatch still calls the configured test receiver. Real hospital phone calls are intentionally out of scope until the call target is changed.
+- Hospital names shown in the UI come from Google Maps/Places search using the locked GPS coordinates.
+- Pulse does not use hardcoded hospital names or local hospital seed data. If Google hospital search is unavailable, dispatch fails plainly instead of inventing candidates.
+- The GPS coordinates and map URL are sent by message instead of relying on a spoken coordinate string.
+- Hackathon v1 routes sequential facility coordination through the configured demo line. It models the selected hospital candidate and facility questions without pretending a real hospital accepted unless call evidence confirms it.
+- Internal provider status, local resilience paths, and evaluation tooling are not presented as user-facing emergency features.
 
 ## Environment
 
@@ -99,10 +105,44 @@ Create `.env.local` in the project root.
 ```bash
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
+OPENAI_REALTIME_TRANSCRIPTION_MODEL=gpt-realtime-whisper
+OPENAI_REALTIME_TRANSCRIPTION_DELAY=low
+OPENAI_FINAL_TRANSCRIPTION_MODEL=gpt-4o-transcribe
+OPENAI_IMAGE_MODEL=gpt-image-2
 
 VAPI_API_KEY=
 VAPI_PHONE_NUMBER_ID=
+PULSE_CALL_PROVIDER=vapi
+# Optional: use a saved, dashboard-tested Vapi assistant instead of a transient assistant.
+PULSE_VAPI_ASSISTANT_ID=
+PULSE_VAPI_USE_SAVED_ASSISTANT=
+PULSE_VAPI_MODEL=gpt-4o-mini
+PULSE_VAPI_VOICE_ID=Elliot
+PULSE_VAPI_RING_TIMEOUT_SECONDS=180
+PULSE_VAPI_MAX_DURATION_SECONDS=300
+PULSE_REQUIRE_INTERACTIVE_CALL=true
+PULSE_COORDINATION_PHONE=
+PULSE_OPERATOR_PHONE=
+# Legacy alias still accepted during migration:
 PULSE_RECEIVING_PHONE=
+
+TWILIO_ACCOUNT_SID=
+# Optional preferred scoped credentials:
+TWILIO_API_KEY_SID=
+TWILIO_API_KEY_SECRET=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+# Optional alias:
+SMS_FROM_NUMBER=
+
+# Optional alternative to Twilio. Receives a JSON incident payload.
+PULSE_MESSAGE_WEBHOOK_URL=
+PULSE_MESSAGE_WEBHOOK_TOKEN=
+
+# Use dry_run locally only when you need verification without placing a phone call.
+PULSE_DISPATCH_MODE=live
+# Production ignores dry_run unless this escape hatch is explicitly set.
+PULSE_ALLOW_DRY_RUN_IN_PRODUCTION=
 
 GOOGLE_MAPS_API_KEY=
 # Optional alternative used by the hospital endpoint:
@@ -111,7 +151,21 @@ GOOGLE_PLACES_API_KEY=
 ADAPTION_LABS_API_KEY=
 # Optional legacy alias:
 ADAPTION_API_KEY=
+# Required to access internal evaluation endpoints in production:
+PULSE_OPS_TOKEN=
 ```
+
+The local `.env.local` file is ignored by Git. If the project is linked to Vercel, pull production secrets with:
+
+```bash
+vercel env pull .env.local --environment=production --yes
+```
+
+For production, configure `PULSE_COORDINATION_PHONE` (or the legacy `PULSE_OPERATOR_PHONE`), Google Maps/Places, OpenAI, Vapi, and either Twilio credentials or `PULSE_MESSAGE_WEBHOOK_URL`. `PULSE_CALL_PROVIDER` defaults to `vapi`; keep it there for an interactive GPT phone conversation. Twilio Voice alone is a real one-way alert call, so Pulse blocks that path while `PULSE_REQUIRE_INTERACTIVE_CALL=true`. When `PULSE_DISPATCH_MODE` is unset or set to `live`, Pulse requires the incident brief message to be sent before it places the coordination call. If `PULSE_DISPATCH_MODE=dry_run` is accidentally set in Vercel, production still runs live unless `PULSE_ALLOW_DRY_RUN_IN_PRODUCTION=true` is also set.
+
+For international destinations such as Singapore numbers, the Vapi phone number must be an imported or paid number that supports international outbound calling. A free US-only Vapi number will not complete those calls.
+
+Internal Vapi readiness can be checked with `GET /api/config/vapi` using `Authorization: Bearer $PULSE_OPS_TOKEN`. It redacts phone numbers and never returns API keys.
 
 ## Run Locally
 
@@ -136,11 +190,12 @@ npm run build
 ├── src/app/page.tsx                         # Main Pulse client experience
 ├── src/app/globals.css                      # Tailwind v4 and global styles
 ├── src/app/layout.tsx                       # App metadata and shell
+├── src/app/api/realtime/session/route.ts    # OpenAI Realtime transcription session endpoint
 ├── src/app/api/triage/route.ts              # OpenAI triage endpoint
-├── src/app/api/hospitals/route.ts           # GPS-based Google Places hospital endpoint
-├── src/app/api/dispatch/call/route.ts       # Vapi test receiver call endpoint
-├── src/app/api/dispatch/status/route.ts     # Vapi call polling endpoint
-├── src/app/api/adaption/safety-lab/route.ts # Adaption Labs safety dataset endpoint
+├── src/app/api/hospitals/route.ts           # GPS-based Google Places hospital ranking endpoint
+├── src/app/api/dispatch/call/route.ts       # Coordination session and Vapi call endpoint
+├── src/app/api/dispatch/status/route.ts     # Vapi/Twilio handoff polling endpoint
+├── src/app/api/adaption/safety-lab/route.ts # Internal evaluation dataset endpoint
 ├── public/
 ├── package.json
 └── README.md

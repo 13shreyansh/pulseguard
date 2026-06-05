@@ -8,6 +8,11 @@ type TriageResult = {
   signals: string[];
   warning: string;
   actions: string[];
+  situationSummary: string;
+  doNow: string[];
+  doNotDo: string[];
+  watchFor: string[];
+  infographicBrief: string;
   dispatchBrief: string;
   source: "openai" | "local_fallback";
 };
@@ -30,10 +35,37 @@ const fallbackTriage: TriageResult = {
     "Keep him still and awake",
     "Watch breathing",
   ],
+  situationSummary: "The person may have a serious injury and should stay still while help is called.",
+  doNow: [
+    "Keep the person still",
+    "Press firmly on bleeding if you see blood",
+    "Keep people back",
+    "Watch their breathing",
+  ],
+  doNotDo: [
+    "Do not move them unless there is danger",
+    "Do not give food or drink",
+    "Do not crowd around them",
+  ],
+  watchFor: [
+    "Breathing changes",
+    "Heavy bleeding",
+    "Confusion or fainting",
+  ],
+  infographicBrief:
+    "Show a calm bystander keeping an injured person still, pressing cloth on bleeding, clearing space, and watching breathing. Non-graphic, simple 3-panel emergency guide.",
   dispatchBrief:
     "Major trauma reported by bystander. Patient movement must be controlled and trauma-capable emergency care is required.",
   source: "local_fallback",
 };
+
+function fallbackResponse(reason: string) {
+  return NextResponse.json({
+    triage: fallbackTriage,
+    source: "local_fallback",
+    warning: reason,
+  });
+}
 
 function normalizeTriage(value: Partial<TriageResult>): TriageResult {
   const emergencyType = value.emergencyType || fallbackTriage.emergencyType;
@@ -64,6 +96,15 @@ function normalizeTriage(value: Partial<TriageResult>): TriageResult {
         )
         .slice(0, 4)
     : fallbackTriage.actions;
+  const doNow = Array.isArray(value.doNow) && value.doNow.length > 0
+    ? value.doNow.slice(0, 4)
+    : actions;
+  const doNotDo = Array.isArray(value.doNotDo) && value.doNotDo.length > 0
+    ? value.doNotDo.slice(0, 4)
+    : fallbackTriage.doNotDo;
+  const watchFor = Array.isArray(value.watchFor) && value.watchFor.length > 0
+    ? value.watchFor.slice(0, 4)
+    : fallbackTriage.watchFor;
 
   return {
     title: titleByType[emergencyType] || value.title || fallbackTriage.title,
@@ -75,6 +116,11 @@ function normalizeTriage(value: Partial<TriageResult>): TriageResult {
       : fallbackTriage.signals,
     warning: value.warning || fallbackTriage.warning,
     actions,
+    situationSummary: value.situationSummary || fallbackTriage.situationSummary,
+    doNow,
+    doNotDo,
+    watchFor,
+    infographicBrief: value.infographicBrief || fallbackTriage.infographicBrief,
     dispatchBrief: value.dispatchBrief || fallbackTriage.dispatchBrief,
     source: "openai",
   };
@@ -90,7 +136,7 @@ export async function POST(request: NextRequest) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "OpenAI API key is not configured" }, { status: 500 });
+    return fallbackResponse("AI triage is unavailable; using conservative guidance.");
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -119,9 +165,15 @@ export async function POST(request: NextRequest) {
             '  "signals": ["3-5 short extracted emergency signals"],',
             '  "warning": "one urgent safety warning for the bystander",',
             '  "actions": ["exactly 4 short bystander actions"],',
+            '  "situationSummary": "one calm sentence explaining what Pulse thinks is happening",',
+            '  "doNow": ["3-4 very short bystander actions"],',
+            '  "doNotDo": ["3-4 very short things to avoid"],',
+            '  "watchFor": ["2-4 changes the bystander should watch for"],',
+            '  "infographicBrief": "one visual brief for a non-graphic 3-panel pictorial guide",',
             '  "dispatchBrief": "one concise sentence for the receiving desk"',
             "}",
             "For trauma, prioritize do-not-move guidance. For bleeding, prioritize firm direct pressure. For not breathing, mention checking breathing and hands-only CPR if needed.",
+            "Write user-facing fields like a calm friend. Use simple words. Avoid technical terms like triage, dispatch, coordination, handoff, sequential, or candidate in user-facing fields.",
             "Do not include 'call emergency services' as a bystander action because Pulse is already coordinating dispatch in the product flow.",
           ].join("\n"),
         },
@@ -135,10 +187,7 @@ export async function POST(request: NextRequest) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    return NextResponse.json(
-      { error: "OpenAI triage failed", details: errorText.slice(0, 300) },
-      { status: 502 },
-    );
+    return fallbackResponse(`AI triage is unavailable; using conservative guidance. ${errorText.slice(0, 160)}`);
   }
 
   const data = (await response.json()) as {
@@ -147,13 +196,13 @@ export async function POST(request: NextRequest) {
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
-    return NextResponse.json({ error: "OpenAI response was empty" }, { status: 502 });
+    return fallbackResponse("AI triage returned no content; using conservative guidance.");
   }
 
   try {
     const parsed = JSON.parse(content) as Partial<TriageResult>;
     return NextResponse.json({ triage: normalizeTriage(parsed) });
   } catch {
-    return NextResponse.json({ error: "OpenAI response was not valid JSON" }, { status: 502 });
+    return fallbackResponse("AI triage returned an unreadable response; using conservative guidance.");
   }
 }
