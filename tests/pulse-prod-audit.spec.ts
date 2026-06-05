@@ -35,6 +35,11 @@ test.use({
   },
 });
 
+test.skip(
+  process.env.PULSE_ALLOW_LIVE_AUDIT !== "true",
+  "Set PULSE_ALLOW_LIVE_AUDIT=true to run the live production audit.",
+);
+
 test("production bystander flow reaches dispatch result", async ({ page }, testInfo) => {
   const apiResults: Array<{ url: string; status: number; method: string }> = [];
   page.on("response", (response) => {
@@ -49,7 +54,7 @@ test("production bystander flow reaches dispatch result", async ({ page }, testI
   });
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Start Emergency Help" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Get help now" })).toBeVisible();
 
   const startText = await page.locator("body").innerText();
   for (const term of forbiddenPublicTerms) {
@@ -57,22 +62,21 @@ test("production bystander flow reaches dispatch result", async ({ page }, testI
   }
 
   await page.getByRole("button", { name: /Start Emergency Help/i }).click();
-  await expect(page.getByLabel("I heard this")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByLabel("Tell me what happened")).toBeVisible({ timeout: 20000 });
 
   const listenText = await page.locator("body").innerText();
-  expect(listenText).toContain("What happened?");
+  expect(listenText).toContain("I’m listening");
   expect(listenText).toMatch(/Location shared|Getting location/);
 
-  await page.getByLabel("I heard this").fill(
+  await page.getByLabel("Tell me what happened").fill(
     "Controlled Pulse verification. No real person needs help. A person in this practice scenario fell near the roadside, is awake and breathing, may have leg pain, and there is no visible heavy bleeding.",
   );
-  await page.getByRole("button", { name: /Check what I heard/i }).click();
-  await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({
-    timeout: 20000,
-  });
-  await page.getByRole("button", { name: "Looks right" }).click();
+  await page.getByRole("button", { name: /Review report/i }).click();
+  await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByLabel("I heard this")).toHaveValue(/practice scenario/);
+  await page.getByRole("button", { name: /Send for help/i }).click();
 
-  await expect(page.getByRole("heading", { name: /Stay with them|Help is ready|Pulse could not confirm help|Help was not confirmed/i })).toBeVisible({
+  await expect(page.getByRole("heading", { name: /I.m contacting help|Help is ready|Pulse could not confirm help|Help was not confirmed/i })).toBeVisible({
     timeout: 20000,
   });
 

@@ -6,7 +6,7 @@ Use this flow for screenshots, video capture, or a live walkthrough.
 
 - Use a phone-sized viewport when possible.
 - Allow location and microphone permissions.
-- If using local verification, keep provider calls disabled unless the run is an intentional live test.
+- If using local verification, keep live calls disabled unless the run is intentional.
 
 ## Walkthrough
 
@@ -15,7 +15,7 @@ Use this flow for screenshots, video capture, or a live walkthrough.
 3. Tap `Start Emergency Help`.
 4. Speak or type: `A person fell near the road, is awake, breathing, and may have a broken leg.`
 5. Show the transcript confirmation screen.
-6. Press `Looks right`.
+6. Press `Send for help`.
 7. Show the guidance card, picture guide, nearby emergency care, and help progress.
 8. End on the final status: accepted, not confirmed, or failed.
 
@@ -30,7 +30,7 @@ Use this flow for screenshots, video capture, or a live walkthrough.
 
 ## Talking Points
 
-- Pulse helps in the first critical minute, before a calm operator conversation is possible.
+- Pulse helps in the first critical minute before a longer handoff conversation is possible.
 - It keeps the bystander focused on safe actions.
 - It shares the map-linked incident brief in writing.
 - It calls for help and reports only what the call evidence supports.

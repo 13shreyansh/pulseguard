@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --pulse-bg: #f7f3ec;
-  --pulse-bg-soft: #fffaf3;
+  --pulse-bg: #ffffff;
+  --pulse-bg-soft: #f8fafc;
   --pulse-panel: #ffffff;
   --pulse-panel-elevated: #ffffff;
-  --pulse-panel-soft: #fffaf3;
-  --pulse-border: #e5ddd2;
-  --pulse-border-strong: #d8d0c4;
+  --pulse-panel-soft: #f8fafc;
+  --pulse-border: #e5e7eb;
+  --pulse-border-strong: #cbd5e1;
   --pulse-text: #15242d;
   --pulse-muted: #6f7b84;
   --pulse-muted-strong: #53616b;
@@ -25,7 +25,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
+  --font-sans: Arial, Helvetica, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -43,7 +43,7 @@ body {
   overflow-x: hidden;
   background: var(--pulse-bg);
   color: var(--pulse-text);
-  font-family: var(--font-inter), Inter, Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
 button,
@@ -76,9 +76,8 @@ button:disabled {
     linear-gradient(145deg, #f44950, #9d1824);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14) inset,
-    0 0 0 10px rgba(217, 45, 56, 0.12),
-    0 0 48px rgba(217, 45, 56, 0.62),
-    0 20px 60px rgba(0, 0, 0, 0.5);
+    0 0 0 8px rgba(217, 45, 56, 0.08),
+    0 20px 48px rgba(217, 45, 56, 0.22);
 }
 
 .pulse-orb::before {
@@ -86,7 +85,7 @@ button:disabled {
   inset: -14px;
   z-index: -1;
   content: "";
-  border: 1px solid rgba(255, 71, 82, 0.72);
+  border: 1px solid rgba(217, 45, 56, 0.42);
   border-radius: inherit;
   animation: pulse-ring 2.4s ease-out infinite;
 }
@@ -125,11 +124,11 @@ button:disabled {
 
 .pulse-mini-map {
   background:
-    linear-gradient(35deg, transparent 46%, rgba(53, 166, 106, 0.28) 47%, rgba(53, 166, 106, 0.28) 53%, transparent 54%),
-    linear-gradient(145deg, transparent 45%, rgba(217, 45, 56, 0.16) 46%, rgba(217, 45, 56, 0.16) 52%, transparent 53%),
-    linear-gradient(rgba(21, 36, 45, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(21, 36, 45, 0.07) 1px, transparent 1px),
-    #edf4ef;
+    linear-gradient(35deg, transparent 46%, rgba(53, 166, 106, 0.22) 47%, rgba(53, 166, 106, 0.22) 53%, transparent 54%),
+    linear-gradient(145deg, transparent 45%, rgba(217, 45, 56, 0.1) 46%, rgba(217, 45, 56, 0.1) 52%, transparent 53%),
+    linear-gradient(rgba(21, 36, 45, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(21, 36, 45, 0.06) 1px, transparent 1px),
+    #f8fafc;
   background-size: auto, auto, 34px 34px, 34px 34px, auto;
 }
 

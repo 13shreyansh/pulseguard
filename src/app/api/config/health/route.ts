@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getResponseLinePhone } from "@/lib/response-line";
 
 export async function GET() {
   const googlePlacesConfigured = Boolean(
@@ -7,7 +8,7 @@ export async function GET() {
   const openaiConfigured = Boolean(process.env.OPENAI_API_KEY);
   const vapiApiConfigured = Boolean(process.env.VAPI_API_KEY);
   const vapiPhoneNumberConfigured = Boolean(process.env.VAPI_PHONE_NUMBER_ID);
-  const operatorPhoneConfigured = Boolean(process.env.PULSE_OPERATOR_PHONE || process.env.PULSE_RECEIVING_PHONE);
+  const responseLineConfigured = Boolean(getResponseLinePhone());
   const twilioCredentialConfigured = Boolean(
     process.env.TWILIO_ACCOUNT_SID &&
       ((process.env.TWILIO_API_KEY_SID && process.env.TWILIO_API_KEY_SECRET) || process.env.TWILIO_AUTH_TOKEN),
@@ -19,7 +20,7 @@ export async function GET() {
   const twilioVoiceConfigured = Boolean(
     twilioCredentialConfigured &&
       (process.env.TWILIO_FROM_NUMBER || process.env.VAPI_CALLER_NUMBER || process.env.SMS_FROM_NUMBER) &&
-      operatorPhoneConfigured,
+      responseLineConfigured,
   );
   const messageWebhookConfigured = Boolean(process.env.PULSE_MESSAGE_WEBHOOK_URL);
   const dryRunRequested = process.env.PULSE_DISPATCH_MODE === "dry_run";
@@ -28,19 +29,19 @@ export async function GET() {
   const dispatchMode = dryRunRequested && dryRunAllowed ? "dry_run" : "live";
   const callProvider = process.env.PULSE_CALL_PROVIDER === "twilio" ? "twilio" : "vapi";
   const interactiveRequired = process.env.PULSE_REQUIRE_INTERACTIVE_CALL !== "false";
-  const vapiConfigured = vapiApiConfigured && vapiPhoneNumberConfigured && operatorPhoneConfigured;
+  const vapiConfigured = vapiApiConfigured && vapiPhoneNumberConfigured && responseLineConfigured;
   const callConfigured = callProvider === "twilio" && !interactiveRequired ? twilioVoiceConfigured : vapiConfigured;
-  const operatorRelayConfigured = callConfigured && (smsConfigured || messageWebhookConfigured);
+  const responseLineReady = callConfigured && (smsConfigured || messageWebhookConfigured);
   const interactiveCallConfigured = vapiConfigured;
   const voiceAlertConfigured = twilioVoiceConfigured;
   const dispatchLabel =
     dispatchMode === "dry_run"
-      ? "Operator handoff verification"
-      : !operatorRelayConfigured
-        ? "Operator dispatch needs configuration"
+      ? "Response-line verification"
+      : !responseLineReady
+        ? "Help contact needs configuration"
         : callProvider === "vapi"
-          ? "Interactive operator call ready"
-          : "One-way operator alert ready";
+          ? "Interactive help call ready"
+          : "One-way help alert ready";
 
   return NextResponse.json({
     googlePlaces: {
@@ -59,7 +60,7 @@ export async function GET() {
       vapiConfigured,
       vapiApiConfigured,
       vapiPhoneNumberConfigured,
-      operatorPhoneConfigured,
+      responseLineConfigured,
       smsConfigured,
       twilioVoiceConfigured,
       messageWebhookConfigured,
@@ -67,7 +68,7 @@ export async function GET() {
       interactiveRequired,
       interactiveCallConfigured,
       voiceAlertConfigured,
-      status: dispatchMode === "dry_run" ? "verification" : operatorRelayConfigured ? "configured" : "missing_config",
+      status: dispatchMode === "dry_run" ? "verification" : responseLineReady ? "configured" : "missing_config",
       label: dispatchLabel,
     },
   });

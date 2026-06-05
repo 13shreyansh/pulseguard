@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkDispatchCooldown, getClientKey, verifyDispatchSession } from "@/lib/dispatch-session";
+import { getResponseLinePhone } from "@/lib/response-line";
 
 type TriageResult = {
   title: string;
@@ -38,6 +40,7 @@ type DispatchRequest = {
   hospital?: HospitalCandidate | null;
   hospitals?: HospitalCandidate[];
   messageAlreadySent?: boolean;
+  dispatchSessionToken?: string;
 };
 
 type CoordinationHandoffStatus =
@@ -86,12 +89,12 @@ type CoordinationCallAttempt = {
   callId?: string;
   callProvider?: OperatorCallResult["provider"];
   dialedNumberLabel: string;
-  routing: "configured_demo_line" | "direct_hospital_phone";
+  routing: "response_line" | "direct_hospital_phone";
 };
 
 type CoordinationSession = {
   id: string;
-  mode: "sequential_demo";
+  mode: "guided_response";
   handoffStatus: CoordinationHandoffStatus;
   selectedDestination?: HospitalCandidate;
   contactTargets: ContactTarget[];
@@ -132,11 +135,7 @@ function normalizeE164Phone(value?: string) {
 }
 
 function getOperatorPhone() {
-  return normalizeE164Phone(
-    process.env.PULSE_COORDINATION_PHONE ||
-      process.env.PULSE_OPERATOR_PHONE ||
-      process.env.PULSE_RECEIVING_PHONE,
-  );
+  return getResponseLinePhone();
 }
 
 function getDispatchMode() {
@@ -326,7 +325,7 @@ function inferRoutingForTarget(body: DispatchRequest, coordinationPhone: string 
     return "direct_hospital_phone" as const;
   }
 
-  return "configured_demo_line" as const;
+  return "response_line" as const;
 }
 
 function timelineForSession(input: {
@@ -390,7 +389,7 @@ function buildCoordinationSession(input: {
 
   return {
     id: `coord-${Date.now()}`,
-    mode: "sequential_demo",
+    mode: "guided_response",
     handoffStatus: input.handoffStatus,
     selectedDestination: input.body.hospital || undefined,
     contactTargets: buildContactTargets(input.body, input.coordinationPhone),
@@ -839,6 +838,24 @@ export async function POST(request: NextRequest) {
 
   if (!transcript || !triage) {
     return NextResponse.json({ error: "Transcript and triage are required" }, { status: 400 });
+  }
+
+  const clientKey = getClientKey(request);
+  if (!verifyDispatchSession(requestBody.dispatchSessionToken, clientKey)) {
+    return NextResponse.json({ error: "Pulse needs a fresh dispatch session before calling for help." }, { status: 403 });
+  }
+
+  if (!requestBody.messageAlreadySent) {
+    const cooldown = checkDispatchCooldown(clientKey);
+    if (!cooldown.ok) {
+      return NextResponse.json(
+        {
+          error: "Pulse is already processing a help request from this browser.",
+          retryAfterSeconds: cooldown.retryAfterSeconds,
+        },
+        { status: 429 },
+      );
+    }
   }
 
   let body: DispatchRequest & { triage: TriageResult };

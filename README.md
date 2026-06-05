@@ -61,10 +61,11 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 | `POST /api/triage` | Returns structured emergency classification and bystander guidance. |
 | `POST /api/guidance/infographic` | Generates a calm pictorial guide with a safe fallback. |
 | `GET /api/hospitals?lat={lat}&lng={lng}` | Searches and ranks nearby emergency care from GPS coordinates. |
+| `POST /api/dispatch/session` | Issues a short-lived browser dispatch token after report confirmation. |
 | `POST /api/dispatch/call` | Shares the incident package and starts the live help call. |
 | `GET /api/dispatch/status` | Polls phone-call evidence and facility-response status. |
 | `GET /api/config/health` | Returns redacted readiness labels for the app shell. |
-| `GET/POST /api/config/vapi` | Protected provider diagnostics for operators only. |
+| `GET/POST /api/config/vapi` | Protected call diagnostics for maintainers only. |
 | `POST /api/adaption/safety-lab` | Protected emergency scenario evaluation route. |
 
 ## Environment
@@ -83,6 +84,7 @@ Required for the full live path:
 - `VAPI_PHONE_NUMBER_ID`
 - `PULSE_COORDINATION_PHONE` or legacy `PULSE_OPERATOR_PHONE`
 - Twilio credentials or `PULSE_MESSAGE_WEBHOOK_URL`
+- `PULSE_DISPATCH_SESSION_SECRET`
 
 Recommended production defaults:
 
@@ -92,7 +94,7 @@ PULSE_REQUIRE_INTERACTIVE_CALL=true
 PULSE_DISPATCH_MODE=live
 ```
 
-Protected operator routes require:
+Protected internal routes require:
 
 ```bash
 PULSE_OPS_TOKEN=
@@ -120,10 +122,11 @@ npm run test:mocked
 Optional live audit:
 
 ```bash
+PULSE_ALLOW_LIVE_AUDIT=true
 npm run test:prod-audit
 ```
 
-The production audit can exercise live services. Run it only when intentionally checking the deployed path.
+The production audit is skipped unless `PULSE_ALLOW_LIVE_AUDIT=true` is set. Run it only when intentionally checking the deployed path.
 
 ## Safety And Product Boundaries
 
@@ -131,7 +134,7 @@ The production audit can exercise live services. Run it only when intentionally 
 - GPS is required before intake so the incident brief can include a usable map link.
 - Hospital names shown in the UI come from live Google Maps/Places search. Pulse does not invent care locations.
 - If hospital search, messaging, or calling cannot complete, the app fails plainly and tells the bystander to call local emergency services.
-- Internal provider diagnostics and safety tooling are protected by `PULSE_OPS_TOKEN` and are not part of the public bystander flow.
+- Internal call diagnostics and safety tooling are protected by `PULSE_OPS_TOKEN` and are not part of the public bystander flow.
 
 More detail: [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md)
 

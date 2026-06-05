@@ -6,14 +6,12 @@ import {
   AlertTriangle,
   Ambulance,
   CheckCircle2,
-  Crosshair,
+  Clock3,
   Eye,
-  FileText,
   Hand,
   HeartPulse,
   Hospital,
   Image as ImageIcon,
-  ListChecks,
   Loader2,
   Lock,
   MapPin,
@@ -162,12 +160,12 @@ type CoordinationCallAttempt = {
   callId?: string;
   callProvider?: "vapi" | "twilio";
   dialedNumberLabel: string;
-  routing: "configured_demo_line" | "direct_hospital_phone";
+  routing: "response_line" | "direct_hospital_phone" | "configured_demo_line";
 };
 
 type CoordinationSession = {
   id: string;
-  mode: "sequential_demo";
+  mode: "guided_response" | "sequential_demo";
   handoffStatus: CoordinationHandoffStatus;
   selectedDestination?: HospitalCandidate;
   contactTargets: ContactTarget[];
@@ -834,6 +832,15 @@ export default function Home() {
     }
   }
 
+  async function createDispatchSessionToken() {
+    const response = await fetch("/api/dispatch/session", { method: "POST" });
+    const data = (await response.json().catch(() => null)) as { token?: string } | null;
+    if (!response.ok || !data?.token) {
+      throw new Error("Pulse could not prepare a secure help request. Try again.");
+    }
+    return data.token;
+  }
+
   const startDispatchCall = useCallback(async (
     transcript: string,
     triageForCall: TriageResult,
@@ -857,6 +864,7 @@ export default function Home() {
     });
 
     try {
+      const dispatchSessionToken = await createDispatchSessionToken();
       const response = await fetch("/api/dispatch/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -867,6 +875,7 @@ export default function Home() {
           hospital,
           hospitals: hospitalsForCall,
           messageAlreadySent: options.messageAlreadySent,
+          dispatchSessionToken,
         }),
       });
 
@@ -942,21 +951,13 @@ export default function Home() {
         if (!response.ok) return;
 	        const data = (await response.json()) as {
 	          status?: DispatchCall["status"];
-	          transcript?: string;
-	          summary?: string;
-	          diagnosticCode?: string;
-	          endedReason?: string;
 	          handoffStatus?: CoordinationHandoffStatus;
 	          facilityResponses?: FacilityResponse[];
+	          retryable?: boolean;
 	        };
-	        const diagnosticCode = data.diagnosticCode || data.endedReason;
 	        setDispatchCall((current) => ({
 	          ...current,
 	          status: data.status || current.status,
-	          transcript: data.transcript || current.transcript,
-	          summary: data.summary || current.summary,
-	          diagnosticCode: diagnosticCode || current.diagnosticCode,
-	          endedReason: data.endedReason || current.endedReason,
 	          handoffStatus: data.handoffStatus || current.handoffStatus,
 	          facilityResponses: data.facilityResponses || current.facilityResponses,
 	          coordinationSession: current.coordinationSession
@@ -981,7 +982,7 @@ export default function Home() {
 	          if (
 	            dispatchCall.callId &&
 	            retryingCallIdRef.current !== dispatchCall.callId &&
-	            isRetryableCallFailure(diagnosticCode) &&
+	            (data.retryable || isRetryableCallFailure(dispatchCall.diagnosticCode || dispatchCall.endedReason)) &&
             currentAttempt < MAX_DISPATCH_CALL_ATTEMPTS &&
             context.submittedReport &&
             context.triage &&
@@ -1016,6 +1017,8 @@ export default function Home() {
   }, [
     dispatchCall.attempt,
     dispatchCall.callId,
+    dispatchCall.diagnosticCode,
+    dispatchCall.endedReason,
     dispatchCall.hospitalIndex,
     dispatchCall.verificationOnly,
     dispatchCall.status,
@@ -1167,7 +1170,7 @@ export default function Home() {
       if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = window.setTimeout(() => {
         if (shouldListenRef.current) {
-          setSilenceNotice("Still listening. Add anything important, then tap Looks right.");
+          setSilenceNotice("Still listening. Add anything important, then tap Review report.");
         }
       }, 3800);
       return;
@@ -1313,7 +1316,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f3ec] text-[#15242d]">
+    <main className="min-h-screen bg-white text-[#15242d]">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-3 py-2">
           <BrandHeader />
@@ -1321,14 +1324,14 @@ export default function Home() {
             <button
               type="button"
               onClick={reset}
-              className="min-h-11 rounded-full border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] shadow-sm transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
+              className="min-h-11 rounded-full border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] shadow-sm transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
             >
               Start new
             </button>
           )}
         </header>
 
-        <section className="flex flex-1 items-center justify-center py-4">
+        <section className="flex flex-1 items-stretch justify-center py-4 lg:py-8">
           {step === "start" && (
             <StartScreen
               locationError={locationError}
@@ -1350,7 +1353,10 @@ export default function Home() {
               report={report}
               reportRef={reportRef}
               silenceNotice={silenceNotice}
-              setReport={setReport}
+              setReport={(value) => {
+                setTranscriptSource("typed");
+                setReport(value);
+              }}
               speechState={speechState}
             />
           )}
@@ -1373,16 +1379,16 @@ export default function Home() {
             />
           )}
 
-	          {step === "sending" && (
-	            <SendingScreen
+          {step === "sending" && (
+            <SendingScreen
                 guidanceImage={guidanceImage}
-	              hospitals={hospitals}
-	              incidentLocation={incidentLocation}
-	              report={submittedReport}
-	              sendPhase={sendPhase}
-	              triage={triage}
-	            />
-	          )}
+              hospitals={hospitals}
+              incidentLocation={incidentLocation}
+              report={submittedReport}
+              sendPhase={sendPhase}
+              triage={triage}
+            />
+          )}
 
           {step === "done" && (
             <HelpNotifiedScreen
@@ -1405,7 +1411,7 @@ export default function Home() {
 function BrandHeader() {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-11 place-items-center rounded-2xl bg-[#d92d38] text-white shadow-lg shadow-[rgba(217,45,56,0.24)]">
+      <span className="grid size-11 place-items-center rounded-lg bg-[#d92d38] text-white shadow-lg shadow-[rgba(217,45,56,0.24)]">
         <Siren className="size-6" />
       </span>
       <div>
@@ -1428,50 +1434,95 @@ function StartScreen({
   const isLocating = locationState === "locking";
 
   return (
-    <div className="grid w-full max-w-5xl items-start gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.8fr)]">
-      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7 lg:p-8">
-	        <div className="inline-flex items-center gap-2 rounded-full bg-[#fff2f1] px-4 py-2 text-sm font-black text-[#a51d2a]">
-	          <ShieldCheck className="size-4" />
-	          Your first minute matters
-	        </div>
-	        <h1 className="mt-6 max-w-2xl text-4xl font-black leading-[0.98] tracking-normal text-[#15242d] sm:text-6xl">
-	          Start Emergency Help
-	        </h1>
-	        <p className="mt-4 max-w-xl text-base font-semibold leading-7 text-[#53616b] sm:text-lg sm:leading-8">
-	          Tell Pulse what happened. It will guide you now, share your location, and call for help.
-	        </p>
-	        <ImmediateActionsCard compact />
-
-        {locationError && (
-          <div className="mt-6 rounded-2xl border border-[#f4b5b7] bg-[#fff2f1] p-4">
-            <div className="flex gap-3">
-              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[#d92d38]" />
-              <p className="text-sm font-bold leading-6 text-[#7b2a31]">{locationError}</p>
+    <div className="w-full max-w-6xl">
+      <section className="grid min-h-[calc(100vh-10rem)] overflow-hidden rounded-lg border border-[#e5e7eb] bg-white shadow-xl shadow-slate-200/70 lg:grid-rows-[minmax(0,1fr)_62px]">
+        <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+          <div className="flex flex-col justify-center p-5 sm:p-8 lg:border-r lg:border-[#e5e7eb] lg:p-10">
+            <div className="flex items-start justify-between gap-4 lg:block">
+              <div>
+                <h1 className="text-5xl font-black leading-none tracking-normal text-[#15242d] sm:text-6xl lg:text-7xl">
+                  Get help now
+                </h1>
+                <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#53616b] sm:text-lg sm:leading-8 lg:text-xl lg:leading-9">
+                  I’ll get your location, listen to what happened, and contact help while you stay with them.
+                </p>
+              </div>
+              <div className="lg:hidden">
+                <LocationPill location={null} locationState={locationState} />
+              </div>
             </div>
+
+            {locationError && (
+              <div className="mt-6 rounded-lg border border-[#f4b5b7] bg-[#fff2f1] p-4">
+                <div className="flex gap-3">
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[#d92d38]" />
+                  <p className="text-sm font-bold leading-6 text-[#7b2a31]">{locationError}</p>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={onStart}
+              disabled={isLocating}
+              className="mt-10 flex min-h-28 w-full items-center justify-center rounded-lg bg-[#d92d38] text-center text-white shadow-xl shadow-[rgba(217,45,56,0.22)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-8 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6] lg:max-w-xl"
+            >
+              <span className="flex items-center justify-center gap-3 px-4">
+                {isLocating ? <Loader2 className="size-8 animate-spin" /> : <PhoneCall className="size-8" />}
+                <span className="text-xl font-black leading-6 sm:text-2xl">{isLocating ? "Getting location" : "Start Emergency Help"}</span>
+              </span>
+            </button>
+
+            <p className="mt-6 max-w-xl text-sm font-bold leading-6 text-[#53616b]">
+              If there is immediate danger, call local emergency services now too.
+            </p>
           </div>
-        )}
 
-	        <button
-	          type="button"
-	          onClick={onStart}
-	          disabled={isLocating}
-	          className="mt-6 flex min-h-16 w-full items-center justify-center rounded-2xl bg-[#d92d38] text-center text-white shadow-xl shadow-[rgba(217,45,56,0.24)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-8 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6] sm:w-auto sm:px-8"
-	        >
-	          <span className="flex items-center justify-center gap-3 px-4">
-	            {isLocating ? <Loader2 className="size-6 animate-spin" /> : <PhoneCall className="size-6" />}
-	            <span className="text-base font-black leading-6 sm:text-lg">{isLocating ? "Getting location" : "Start Emergency Help"}</span>
-	          </span>
-	        </button>
-	      </section>
+          <aside className="grid content-center gap-4 border-t border-[#e5e7eb] bg-[#f8fafc] p-5 sm:p-8 lg:border-t-0 lg:p-10">
+            <div className="hidden justify-end lg:flex">
+              <LocationPill location={null} locationState={locationState} />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-[#d92d38]">What happens next</p>
+              <div className="mt-6 grid gap-5">
+                <BystanderStep icon={MapPin} title="Share location" detail="I’ll ask for your location so help knows where to go." />
+                <BystanderStep icon={Mic} title="Tell me what happened" detail="Speak or type. You can fix the report before sending." />
+                <BystanderStep icon={Hand} title="Stay with them" detail="Keep them still. Watch breathing. Keep this page open." />
+              </div>
+            </div>
 
-	      <section className="grid gap-4">
-	        <InfoCard icon={Crosshair} title="Location shared" detail="Pulse uses your current location so help knows where to go." />
-	        <InfoCard icon={Mic} title="Tell us what happened" detail="Speak or type. You can edit the report before sending it." />
-	        <InfoCard icon={ListChecks} title="Stay guided" detail="Pulse keeps the next steps visible while it calls for help." />
-	      </section>
-	    </div>
-	  );
-	}
+            <div className="rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
+              <div className="flex gap-3">
+                <Siren className="mt-1 size-8 shrink-0 text-[#d92d38]" />
+                <div>
+                  <h2 className="text-2xl font-black text-[#15242d]">I’ll handle the background.</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">
+                    You focus on the person. Details about calls, care options, and evidence stay collapsed unless you open them.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div className="grid gap-3 border-t border-[#e5e7eb] bg-white px-5 py-3 text-sm font-bold leading-5 text-[#53616b] sm:grid-cols-3 sm:items-center sm:px-8">
+          <div className="flex items-center gap-3">
+            <Lock className="size-5 text-[#53616b]" />
+            <p>Your data stays private.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="size-5 text-[#53616b]" />
+            <p>Simple steps stay visible.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Clock3 className="size-5 text-[#53616b]" />
+            <p>Help gets details faster.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
 
 function ListeningScreen({
   audioLevels,
@@ -1518,21 +1569,21 @@ function ListeningScreen({
 
   return (
     <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
+      <section className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <StatusBadge tone={speechState === "listening" || speechState === "connecting" ? "red" : microphoneFallback ? "warning" : "green"} icon={Mic} label={listenLabel} />
             <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
-              What happened?
+              I’m listening
             </h1>
             <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
-              Speak naturally. Pulse will show what it heard before anything is sent.
+              Tell me what happened. You can fix the text here, then send it for help.
             </p>
           </div>
           <LocationPill location={incidentLocation} locationState={locationState} />
         </div>
 
-        <div className="mt-6 rounded-[2rem] border border-[#f3b0b4] bg-[#fff2f1] p-5">
+        <div className="mt-6 rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <div className={`pulse-orb grid size-24 shrink-0 place-items-center rounded-full text-white ${speechState === "listening" ? "" : "opacity-80"}`}>
               {speechState === "connecting" || speechState === "processing" ? <Loader2 className="size-9 animate-spin" /> : <Mic className="size-10" />}
@@ -1561,7 +1612,7 @@ function ListeningScreen({
         </div>
 
         {!locked && (
-          <div className="mt-6 rounded-2xl border border-[#f4b5b7] bg-[#fff2f1] p-4">
+          <div className="mt-6 rounded-lg border border-[#f4b5b7] bg-[#fff2f1] p-4">
             <p className="text-sm font-bold leading-6 text-[#7b2a31]">
               {locationError || "Location is needed to send help to the right place."}
             </p>
@@ -1569,7 +1620,7 @@ function ListeningScreen({
               type="button"
               onClick={onRequestLocation}
               disabled={locationState === "locking"}
-              className="mt-4 min-h-12 rounded-xl bg-[#d92d38] px-5 text-sm font-black text-white transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+              className="mt-4 min-h-12 rounded-lg bg-[#d92d38] px-5 text-sm font-black text-white transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
             >
               {locationState === "locking" ? "Getting location" : "Share my location"}
             </button>
@@ -1577,7 +1628,7 @@ function ListeningScreen({
         )}
 
         {microphoneFallback && locked && (
-          <div className="mt-6 rounded-2xl border border-[#ecd8a8] bg-[#fff9ea] p-4">
+          <div className="mt-6 rounded-lg border border-[#ecd8a8] bg-[#fff9ea] p-4">
             <p className="text-sm font-bold leading-6 text-[#705616]">
               You can type what happened. Pulse can still share your location and call for help.
             </p>
@@ -1585,7 +1636,7 @@ function ListeningScreen({
         )}
 
         <label htmlFor="incident-report" className="mt-7 block text-sm font-black text-[#53616b]">
-          I heard this
+          Tell me what happened
         </label>
         <textarea
           ref={reportRef}
@@ -1594,23 +1645,15 @@ function ListeningScreen({
           onChange={(event) => setReport(event.target.value)}
           placeholder={locked ? "Say or type what happened, where the person is, and what you can see." : "Share your location first."}
           disabled={!locked || speechState === "processing"}
-          className="mt-3 min-h-72 w-full resize-none rounded-3xl border border-[#ded5c9] bg-[#fffaf3] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#9b9289] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:bg-[#efe9df] disabled:text-[#8d847b]"
+          className="mt-3 min-h-72 w-full resize-none rounded-lg border border-[#cbd5e1] bg-[#f8fafc] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#94a3b8] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:bg-[#f1f5f9] disabled:text-[#64748b]"
         />
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => reportRef.current?.focus()}
-            disabled={!locked}
-            className="min-h-14 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:text-[#aaa199]"
-          >
-            Type instead
-          </button>
+        <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <button
             type="button"
             onClick={onRestartListening}
             disabled={!locked}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:text-[#aaa199]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:text-[#94a3b8]"
           >
             <RefreshCw className="size-4" />
             Restart listening
@@ -1619,19 +1662,28 @@ function ListeningScreen({
             type="button"
             onClick={onProcess}
             disabled={!canProcess || speechState === "processing"}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#d92d38] px-5 text-base font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
           >
             {speechState === "processing" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Check what I heard
+            Review report
           </button>
         </div>
       </section>
 
-	      <aside className="grid content-start gap-4">
-	        <ImmediateActionsCard />
-	        <SafetyCard />
-	        <LocationCard incidentLocation={incidentLocation} compact />
-	      </aside>
+      <aside className="grid content-start gap-4">
+        <div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
+          <p className="text-sm font-black text-[#d92d38]">Keep it simple</p>
+          <div className="mt-5 grid gap-5">
+            <BystanderStep icon={Mic} title="I’m listening" detail="Live text appears here. Type over anything that is wrong." />
+            <BystanderStep icon={MapPin} title="Location status" detail={locked ? "Location is ready to share." : "Share location before sending."} />
+            <BystanderStep icon={Send} title="Review first" detail="Nothing is sent until you confirm the report." />
+          </div>
+        </div>
+        <div className="rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
+          <p className="text-lg font-black text-[#15242d]">Stay with them. Keep them still.</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">If they stop breathing normally, call local emergency services now.</p>
+        </div>
+      </aside>
     </div>
   );
 }
@@ -1653,8 +1705,7 @@ function ConfirmReportScreen({
   setReport: (value: string) => void;
   transcriptSource: "live" | "final" | "typed";
 }) {
-  const canConfirm = report.trim().length >= 12;
-  const sourceLabel =
+  const sourceText =
     transcriptSource === "final"
       ? "Pulse cleaned up the wording from your voice."
       : transcriptSource === "live"
@@ -1663,52 +1714,55 @@ function ConfirmReportScreen({
 
   return (
     <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
-        <StatusBadge tone="green" icon={CheckCircle2} label="Review first" />
+      <section className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-7">
+        <StatusBadge tone="green" icon={CheckCircle2} label="Review before sending" />
         <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
           This is what I heard.
         </h1>
         <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
-          If this looks right, Pulse will share your location and start calling for help.
+          Check this once. Pulse will share your location and contact help only after you confirm.
         </p>
-        <div className="mt-5 rounded-2xl border border-[#bfe4cf] bg-[#f0fbf4] p-4">
-          <p className="text-sm font-bold leading-6 text-[#1e7b4a]">{sourceLabel}</p>
-        </div>
 
         <label htmlFor="confirmed-report" className="mt-7 block text-sm font-black text-[#53616b]">
-          What happened
+          I heard this
         </label>
         <textarea
           ref={reportRef}
           id="confirmed-report"
           value={report}
           onChange={(event) => setReport(event.target.value)}
-          className="mt-3 min-h-72 w-full resize-none rounded-3xl border border-[#ded5c9] bg-[#fffaf3] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#9b9289] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+          className="mt-3 min-h-72 w-full resize-none rounded-lg border border-[#cbd5e1] bg-[#f8fafc] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#94a3b8] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
         />
+        <p className="mt-3 text-sm font-bold leading-6 text-[#53616b]">{sourceText}</p>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <button
             type="button"
             onClick={onFix}
-            className="min-h-14 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
           >
-            Fix it
+            Edit more
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            disabled={!canConfirm}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+            disabled={report.trim().length < 12}
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#d92d38] px-5 text-base font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
           >
-            <CheckCircle2 className="size-4" />
-            Looks right
+            <Send className="size-4" />
+            Send for help
           </button>
         </div>
       </section>
 
       <aside className="grid content-start gap-4">
-        <ImmediateActionsCard />
         <LocationCard incidentLocation={incidentLocation} compact />
+        <div className="rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
+          <p className="text-lg font-black text-[#15242d]">Stay with them. Keep them still.</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">
+            This review step prevents wrong speech text from being sent for help.
+          </p>
+        </div>
       </aside>
     </div>
   );
@@ -1732,49 +1786,61 @@ function SendingScreen({
   const currentIndex = phaseIndex(sendPhase);
 
   return (
-    <div className="w-full max-w-4xl rounded-[2rem] border border-[#e5ddd2] bg-white p-6 shadow-2xl shadow-[#ccbca8]/20 sm:p-8">
-      <StatusBadge tone="red" icon={PhoneCall} label="Sending now" />
-      <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
-        Stay with them. Pulse is calling for help.
-      </h1>
-	      <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
-	        Keep this screen open. Follow the simple steps below while Pulse shares the details.
-	      </p>
-	      <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
+    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-xl shadow-slate-200/70 sm:p-8">
+        <StatusBadge tone="red" icon={PhoneCall} label="Sending now" />
+        <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+          I’m contacting help
+        </h1>
+        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+          Stay with them. Keep them still. Keep this screen open while I share the details.
+        </p>
+        <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
+      </section>
 
-	      <div className="mt-8 grid gap-3">
-        {statusSteps.map((step, index) => {
-          const active = currentIndex === index;
-          const complete = currentIndex > index;
-          return (
-            <div
-              key={step.phase}
-              className={`flex items-center gap-4 rounded-2xl border p-4 ${
-                active
-                  ? "border-[#f3b0b4] bg-[#fff2f1]"
-                  : complete
-                    ? "border-[#bfe4cf] bg-[#f0fbf4]"
-                    : "border-[#e5ddd2] bg-[#fffaf3]"
-              }`}
-            >
-              <span className={`grid size-10 place-items-center rounded-full ${complete ? "bg-[#35a66a] text-white" : active ? "bg-[#d92d38] text-white" : "bg-[#e8dfd2] text-[#6f7b84]"}`}>
-                {complete ? <CheckCircle2 className="size-5" /> : active ? <Loader2 className="size-5 animate-spin" /> : index + 1}
-              </span>
-              <p className="text-base font-black text-[#15242d]">{step.label}</p>
-            </div>
-          );
-        })}
-      </div>
+      <aside className="grid content-start gap-4">
+        <div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
+          <p className="text-sm font-black text-[#d92d38]">Progress</p>
+          <div className="mt-5 grid gap-3">
+            {statusSteps.map((step, index) => {
+              const active = currentIndex === index;
+              const complete = currentIndex > index;
+              return (
+                <div
+                  key={step.phase}
+                  className={`flex items-center gap-4 rounded-lg border p-4 ${
+                    active
+                      ? "border-[#f3b0b4] bg-[#fff2f1]"
+                      : complete
+                        ? "border-[#bfe4cf] bg-[#f0fbf4]"
+                        : "border-[#e5e7eb] bg-white"
+                  }`}
+                >
+                  <span className={`grid size-10 place-items-center rounded-full ${complete ? "bg-[#35a66a] text-white" : active ? "bg-[#d92d38] text-white" : "bg-[#e5e7eb] text-[#6f7b84]"}`}>
+                    {complete ? <CheckCircle2 className="size-5" /> : active ? <Loader2 className="size-5 animate-spin" /> : index + 1}
+                  </span>
+                  <p className="text-base font-black text-[#15242d]">{step.label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <LocationCard incidentLocation={incidentLocation} compact />
-        <CareCandidateCard hospital={hospitals[0]} />
-      </div>
+        <details className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-4">
+          <summary className="cursor-pointer text-sm font-black text-[#15242d] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]">
+            Details
+          </summary>
+          <div className="mt-4 grid gap-4">
+            <LocationCard incidentLocation={incidentLocation} compact />
+            <CareCandidateCard hospital={hospitals[0]} />
+          </div>
 
-      <div className="mt-4 rounded-3xl border border-[#e5ddd2] bg-[#fffaf3] p-5">
-        <p className="text-sm font-black text-[#53616b]">What happened</p>
-        <p className="mt-3 line-clamp-6 text-sm font-semibold leading-6 text-[#15242d]">{report}</p>
-      </div>
+          <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-white p-5">
+            <p className="text-sm font-black text-[#53616b]">What happened</p>
+            <p className="mt-3 line-clamp-6 text-sm font-semibold leading-6 text-[#15242d]">{report}</p>
+          </div>
+        </details>
+      </aside>
     </div>
   );
 }
@@ -1804,27 +1870,34 @@ function HelpNotifiedScreen({
 
   return (
     <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
+      <section className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-7">
         <StatusBadge tone={isFailure ? "danger" : "green"} icon={isFailure ? AlertTriangle : CheckCircle2} label={isFailure ? "Needs attention" : "Help contacted"} />
         <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
           {helpStatus.title}
         </h1>
         <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">{helpStatus.detail}</p>
 
-        <div className="mt-7 grid gap-4 md:grid-cols-2">
-          <LocationCard incidentLocation={incidentLocation} />
-          <CareCandidateCard hospital={hospitals[dispatchCall.hospitalIndex ?? 0] || hospitals[0]} />
-        </div>
-
-	        <CoordinationTimelinePanel items={coordinationTimeline} session={dispatchCall.coordinationSession} />
-
         <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
+      </section>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <aside className="grid content-start gap-4">
+        <details className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-4">
+          <summary className="cursor-pointer text-sm font-black text-[#15242d] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]">
+            Details
+          </summary>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <LocationCard incidentLocation={incidentLocation} />
+            <CareCandidateCard hospital={hospitals[dispatchCall.hospitalIndex ?? 0] || hospitals[0]} />
+          </div>
+
+          <CoordinationTimelinePanel items={coordinationTimeline} session={dispatchCall.coordinationSession} />
+        </details>
+
+        <div className="grid gap-3">
           <button
             type="button"
             onClick={onAddDetail}
-            className="min-h-14 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+            className="min-h-14 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
           >
             Add new detail
           </button>
@@ -1833,7 +1906,7 @@ function HelpNotifiedScreen({
               href={getLocationUrl(incidentLocation)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-[#d8d0c4] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
             >
               <Navigation className="size-4" />
               Show my location
@@ -1842,29 +1915,12 @@ function HelpNotifiedScreen({
           <button
             type="button"
             onClick={onReset}
-            className="min-h-14 rounded-2xl bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
+            className="min-h-14 rounded-lg bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
           >
             Start new emergency
           </button>
         </div>
-      </section>
-
-      <aside className="grid content-start gap-4">
-        <SafetyCard />
-        <GuidanceMini actions={triage.doNow || triage.actions} />
       </aside>
-    </div>
-  );
-}
-
-function InfoCard({ detail, icon: Icon, title }: { detail: string; icon: LucideIcon; title: string }) {
-  return (
-    <div className="rounded-3xl border border-[#e5ddd2] bg-white p-5 shadow-xl shadow-[#ccbca8]/15">
-      <span className="grid size-12 place-items-center rounded-2xl bg-[#fff2f1] text-[#d92d38]">
-        <Icon className="size-6" />
-      </span>
-      <h2 className="mt-4 text-xl font-black text-[#15242d]">{title}</h2>
-      <p className="mt-2 text-sm font-semibold leading-6 text-[#53616b]">{detail}</p>
     </div>
   );
 }
@@ -1892,6 +1948,28 @@ function StatusBadge({
       <Icon className="size-4" />
       {label}
     </span>
+  );
+}
+
+function BystanderStep({
+  detail,
+  icon: Icon,
+  title,
+}: {
+  detail: string;
+  icon: LucideIcon;
+  title: string;
+}) {
+  return (
+    <div className="flex gap-4">
+      <span className="grid size-12 shrink-0 place-items-center rounded-lg border border-[#e5e7eb] bg-white text-[#d92d38]">
+        <Icon className="size-6" />
+      </span>
+      <div>
+        <h2 className="text-lg font-black text-[#15242d]">{title}</h2>
+        <p className="mt-1 text-sm font-semibold leading-6 text-[#53616b]">{detail}</p>
+      </div>
+    </div>
   );
 }
 
@@ -1936,14 +2014,14 @@ function LocationCard({
   incidentLocation: IncidentLocation | null;
 }) {
   return (
-    <div className={`overflow-hidden rounded-3xl border border-[#e5ddd2] bg-white ${compact ? "p-4" : "p-5"}`}>
-      <div className="pulse-mini-map relative min-h-36 overflow-hidden rounded-2xl border border-[#e5ddd2] bg-[#edf4ef]">
+    <div className={`overflow-hidden rounded-lg border border-[#e5e7eb] bg-white ${compact ? "p-4" : "p-5"}`}>
+      <div className="pulse-mini-map relative min-h-36 overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
         <div className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#d92d38] text-white shadow-xl shadow-[rgba(217,45,56,0.28)]">
           <MapPin className="size-7" />
         </div>
       </div>
       <div className="mt-4 flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#f0fbf4] text-[#1e7b4a]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#f0fbf4] text-[#1e7b4a]">
           <CheckCircle2 className="size-5" />
         </span>
         <div>
@@ -1962,9 +2040,9 @@ function LocationCard({
 
 function CareCandidateCard({ hospital }: { hospital?: HospitalCandidate }) {
   return (
-    <div className="overflow-hidden rounded-3xl border border-[#e5ddd2] bg-white p-5">
+    <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white p-5">
       <div className="flex items-start gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#f0fbf4] text-[#1e7b4a]">
+        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#f0fbf4] text-[#1e7b4a]">
           <Hospital className="size-6" />
         </span>
         <div>
@@ -1983,36 +2061,6 @@ function CareCandidateCard({ hospital }: { hospital?: HospitalCandidate }) {
   );
 }
 
-function ImmediateActionsCard({ compact = false }: { compact?: boolean }) {
-  const actions = [
-    { icon: Lock, title: "Make the area safe", detail: "Do not enter traffic, fire, water, or violence." },
-    { icon: HeartPulse, title: "Check breathing", detail: "Look for normal breathing and keep the airway clear." },
-    { icon: Ambulance, title: "Call local emergency services", detail: "Do this now if there is immediate danger or Pulse cannot confirm help." },
-  ];
-
-  return (
-    <div className={`rounded-3xl border border-[#f3b0b4] bg-[#fff2f1] ${compact ? "mt-5 p-4" : "p-5"}`}>
-      <div className="flex items-center gap-3">
-        <Siren className="size-5 text-[#d92d38]" />
-        <h2 className="text-lg font-black text-[#15242d]">Do this now</h2>
-      </div>
-      <div className={`mt-4 grid gap-3 ${compact ? "" : "sm:grid-cols-1"}`}>
-        {actions.map(({ detail, icon: Icon, title }) => (
-          <div key={title} className="flex gap-3 rounded-2xl bg-white p-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#d92d38] text-white">
-              <Icon className="size-5" />
-            </span>
-            <div>
-              <p className="text-sm font-black leading-5 text-[#15242d]">{title}</p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-[#53616b]">{detail}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function CoordinationTimelinePanel({
   items,
   session,
@@ -2021,7 +2069,7 @@ function CoordinationTimelinePanel({
   session?: CoordinationSession;
 }) {
   return (
-    <div className="mt-6 rounded-[2rem] border border-[#e5ddd2] bg-[#fffaf3] p-5">
+    <div className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-black text-[#d92d38]">Help progress</p>
@@ -2035,9 +2083,9 @@ function CoordinationTimelinePanel({
           const isDone = item.state === "done";
           const needsAttention = item.state === "attention";
           return (
-            <div key={item.id} className="flex items-center gap-4 rounded-3xl border border-[#e5ddd2] bg-white p-4">
+            <div key={item.id} className="flex items-center gap-4 rounded-lg border border-[#e5e7eb] bg-white p-4">
               <span
-                className={`grid size-10 shrink-0 place-items-center rounded-2xl ${
+                className={`grid size-10 shrink-0 place-items-center rounded-lg ${
                   isDone
                     ? "bg-[#35a66a] text-white"
                     : needsAttention
@@ -2058,13 +2106,13 @@ function CoordinationTimelinePanel({
 
       {session && (
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl border border-[#e5ddd2] bg-white p-4">
+          <div className="rounded-lg border border-[#e5e7eb] bg-white p-4">
             <p className="text-sm font-black text-[#15242d]">What Pulse asked</p>
             <div className="mt-3 grid gap-2">
               {session.facilityQuestions.map((question) => {
                 const response = session.facilityResponses.find((item) => item.questionId === question.id);
                 return (
-                  <div key={question.id} className="rounded-2xl bg-[#f7f3ec] px-4 py-3">
+                  <div key={question.id} className="rounded-lg bg-[#f8fafc] px-4 py-3">
                     <p className="text-sm font-bold leading-5 text-[#15242d]">{question.label}</p>
                     <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#6f7b84]">
                       {response?.status === "yes" ? "Confirmed" : response?.status === "no" ? "Unavailable" : response?.status === "unknown" ? "Not confirmed" : "Pending"}
@@ -2075,11 +2123,11 @@ function CoordinationTimelinePanel({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-[#e5ddd2] bg-white p-4">
+          <div className="rounded-lg border border-[#e5e7eb] bg-white p-4">
             <p className="text-sm font-black text-[#15242d]">Who may help next</p>
             <div className="mt-3 grid gap-2">
               {session.contactTargets.slice(0, 4).map((target) => (
-                <div key={target.id} className="rounded-2xl bg-[#f7f3ec] px-4 py-3">
+                <div key={target.id} className="rounded-lg bg-[#f8fafc] px-4 py-3">
                   <p className="text-sm font-bold leading-5 text-[#15242d]">{target.name}</p>
                   <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#6f7b84]">
                     {target.status === "selected" ? "Calling first" : target.status === "queued" ? "Ready next" : target.status === "manual_required" ? "Call manually if needed" : "Not connected yet"}
@@ -2090,24 +2138,6 @@ function CoordinationTimelinePanel({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function SafetyCard() {
-  return (
-    <div className="rounded-3xl border border-[#e5ddd2] bg-white p-5 shadow-xl shadow-[#ccbca8]/15">
-      <div className="flex gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#fff2f1] text-[#d92d38]">
-          <Lock className="size-5" />
-        </span>
-        <div>
-          <h2 className="text-lg font-black text-[#15242d]">Stay safe first</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[#53616b]">
-            Do not enter danger to help. Move only if the area is unsafe.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2128,7 +2158,7 @@ function FirstAidInfographic({
   }));
 
   return (
-    <div className="mt-7 rounded-[2rem] border border-[#e5ddd2] bg-[#fffaf3] p-5">
+    <div className="mt-7 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-black text-[#d92d38]">Do this now</p>
@@ -2137,7 +2167,7 @@ function FirstAidInfographic({
         {guidanceImage.status === "loading" ? <Loader2 className="size-7 animate-spin text-[#35a66a]" /> : <ImageIcon className="size-7 text-[#35a66a]" />}
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#e5ddd2] bg-white">
+      <div className="mt-5 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
         {guidanceImage.imageDataUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -2150,8 +2180,8 @@ function FirstAidInfographic({
             {enrichedSteps.map((step, index) => {
               const Icon = getActionIcon(step.title);
               return (
-                <div key={step.title} className="flex flex-col justify-between rounded-3xl border border-[#d7ebdf] bg-white p-4">
-                  <span className="grid size-14 place-items-center rounded-2xl bg-[#fff2f1] text-[#d92d38]">
+                <div key={step.title} className="flex flex-col justify-between rounded-lg border border-[#d7ebdf] bg-white p-4">
+                  <span className="grid size-14 place-items-center rounded-lg bg-[#fff2f1] text-[#d92d38]">
                     <Icon className="size-8" />
                   </span>
                   <div>
@@ -2196,31 +2226,13 @@ function GuidanceList({
         : "border-[#f3b0b4] bg-[#fff2f1] text-[#a51d2a]";
 
   return (
-    <div className={`rounded-3xl border p-4 ${className}`}>
+    <div className={`rounded-lg border p-4 ${className}`}>
       <p className="text-sm font-black">{title}</p>
       <div className="mt-3 grid gap-2">
         {items.map((item) => (
-          <p key={item} className="rounded-2xl bg-white/75 px-3 py-2 text-sm font-bold leading-5 text-[#15242d]">
+          <p key={item} className="rounded-lg bg-white/75 px-3 py-2 text-sm font-bold leading-5 text-[#15242d]">
             {normalizeAction(item)}
           </p>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function GuidanceMini({ actions }: { actions: string[] }) {
-  return (
-    <div className="rounded-3xl border border-[#e5ddd2] bg-white p-5 shadow-xl shadow-[#ccbca8]/15">
-      <div className="flex items-center gap-3">
-        <FileText className="size-5 text-[#d92d38]" />
-        <h2 className="text-lg font-black text-[#15242d]">Keep doing this</h2>
-      </div>
-      <div className="mt-4 grid gap-2">
-        {actions.slice(0, 4).map((action) => (
-          <div key={action} className="rounded-2xl bg-[#f7f3ec] px-4 py-3 text-sm font-bold leading-5 text-[#53616b]">
-            {normalizeAction(action)}
-          </div>
         ))}
       </div>
     </div>

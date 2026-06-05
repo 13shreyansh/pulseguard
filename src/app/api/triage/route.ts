@@ -68,7 +68,19 @@ function fallbackResponse(reason: string) {
 }
 
 function normalizeTriage(value: Partial<TriageResult>): TriageResult {
-  const emergencyType = value.emergencyType || fallbackTriage.emergencyType;
+  const allowedEmergencyTypes = new Set([
+    "MAJOR_TRAUMA",
+    "CARDIAC_ARREST",
+    "RESPIRATORY_DISTRESS",
+    "STROKE",
+    "SEVERE_BLEEDING",
+    "OBSTETRIC_EMERGENCY",
+    "UNKNOWN",
+  ]);
+  const allowedSeverities = new Set(["critical", "high", "moderate"]);
+  const emergencyType = value.emergencyType && allowedEmergencyTypes.has(value.emergencyType)
+    ? value.emergencyType
+    : fallbackTriage.emergencyType;
   const titleByType: Record<string, string> = {
     MAJOR_TRAUMA: "Major trauma detected",
     CARDIAC_ARREST: "Cardiac arrest risk detected",
@@ -88,13 +100,7 @@ function normalizeTriage(value: Partial<TriageResult>): TriageResult {
     UNKNOWN: "Emergency department required",
   };
   const actions = Array.isArray(value.actions) && value.actions.length > 0
-    ? value.actions
-        .map((action) =>
-          /call emergency|call ambulance|dial emergency/i.test(action)
-            ? "Keep space clear for responders"
-            : action,
-        )
-        .slice(0, 4)
+    ? value.actions.slice(0, 4)
     : fallbackTriage.actions;
   const doNow = Array.isArray(value.doNow) && value.doNow.length > 0
     ? value.doNow.slice(0, 4)
@@ -109,7 +115,7 @@ function normalizeTriage(value: Partial<TriageResult>): TriageResult {
   return {
     title: titleByType[emergencyType] || value.title || fallbackTriage.title,
     emergencyType,
-    severity: value.severity || fallbackTriage.severity,
+    severity: value.severity && allowedSeverities.has(value.severity) ? value.severity : fallbackTriage.severity,
     hospitalType: hospitalByType[emergencyType] || value.hospitalType || fallbackTriage.hospitalType,
     signals: Array.isArray(value.signals) && value.signals.length > 0
       ? value.signals.slice(0, 5)
@@ -174,7 +180,7 @@ export async function POST(request: NextRequest) {
             "}",
             "For trauma, prioritize do-not-move guidance. For bleeding, prioritize firm direct pressure. For not breathing, mention checking breathing and hands-only CPR if needed.",
             "Write user-facing fields like a calm friend. Use simple words. Avoid technical terms like triage, dispatch, coordination, handoff, sequential, or candidate in user-facing fields.",
-            "Do not include 'call emergency services' as a bystander action because Pulse is already coordinating dispatch in the product flow.",
+            "If the situation is immediately life-threatening or help is not confirmed, it is acceptable to tell the bystander to call local emergency services.",
           ].join("\n"),
         },
         {

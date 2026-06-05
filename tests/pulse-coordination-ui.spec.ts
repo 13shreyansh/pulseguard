@@ -70,7 +70,7 @@ const hospitals = [
 function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "calling") {
   return {
     id: "coord-test",
-    mode: "sequential_demo",
+    mode: "guided_response",
     handoffStatus,
     selectedDestination: hospitals[0],
     contactTargets: [
@@ -132,7 +132,7 @@ function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "call
         callId: "call-accepted",
         callProvider: "vapi",
         dialedNumberLabel: "response line",
-        routing: "configured_demo_line",
+        routing: "response_line",
       },
     ],
     bystanderGuidance: {
@@ -184,8 +184,16 @@ test.use({
 });
 
 async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed") {
+  let dispatchRequests = 0;
+
   await page.route("**/api/realtime/session", async (route) => {
     await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "mocked" }) });
+  });
+  await page.route("**/api/dispatch/session", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ token: "test-session-token", expiresInSeconds: 600 }),
+    });
   });
   await page.route("**/api/triage", async (route) => {
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ triage }) });
@@ -222,6 +230,7 @@ async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed
     });
   });
   await page.route("**/api/dispatch/call", async (route) => {
+    dispatchRequests += 1;
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -238,27 +247,36 @@ async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed
       }),
     });
   });
+
+  return {
+    getDispatchRequests: () => dispatchRequests,
+  };
 }
 
 test("mobile panic flow shows guidance before dispatch and accepted help evidence", async ({ page }) => {
-  await mockIntake(page, "accepted");
+  const mocks = await mockIntake(page, "accepted");
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Do this now" })).toBeVisible();
-  await expect(page.getByText("Check breathing")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Get help now" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start Emergency Help" })).toBeVisible();
 
   await page.getByRole("button", { name: "Start Emergency Help" }).click();
-  await expect(page.getByLabel("I heard this")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByLabel("Tell me what happened")).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("Listening now").or(page.getByText("Typing is okay"))).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Do this now" })).toBeVisible();
 
-  await page.getByLabel("I heard this").fill("A person fell near the road, is awake, breathing, and may have a broken leg.");
-  await page.getByRole("button", { name: "Check what I heard" }).click();
+  await page.getByLabel("Tell me what happened").fill("A person fell near the road, is awake, breathing, and may have a broken leg.");
+  await page.getByRole("button", { name: "Review report" }).click();
+
   await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText("Pulse cleaned up the wording from your voice.")).toBeVisible();
-  await page.getByRole("button", { name: "Looks right" }).click();
+  await expect(page.getByLabel("I heard this")).toHaveValue(/A person fell near the road/);
+  expect(mocks.getDispatchRequests()).toBe(0);
+
+  await page.getByRole("button", { name: "Send for help" }).click();
 
   await expect(page.getByRole("heading", { name: "Help is ready to receive them." })).toBeVisible({ timeout: 20000 });
+  expect(mocks.getDispatchRequests()).toBe(1);
+  await expect(page.getByText("Details", { exact: true })).toBeVisible();
+  await page.getByText("Details", { exact: true }).click();
   await expect(await page.getByText("City Trauma Centre", { exact: true }).count()).toBeGreaterThan(0);
   await expect(page.getByText("What Pulse asked")).toBeVisible();
   await expect(await page.getByText("Confirmed", { exact: true }).count()).toBeGreaterThan(0);
@@ -271,18 +289,21 @@ test("mobile panic flow shows guidance before dispatch and accepted help evidenc
 });
 
 test("mobile panic flow does not overstate an unconfirmed handoff", async ({ page }) => {
-  await mockIntake(page, "not_confirmed");
+  const mocks = await mockIntake(page, "not_confirmed");
 
   await page.goto("/");
   await page.getByRole("button", { name: "Start Emergency Help" }).click();
-  await expect(page.getByLabel("I heard this")).toBeVisible({ timeout: 15000 });
-  await page.getByLabel("I heard this").fill("A person collapsed after a collision and needs urgent help.");
-  await page.getByRole("button", { name: "Check what I heard" }).click();
+  await expect(page.getByLabel("Tell me what happened")).toBeVisible({ timeout: 15000 });
+  await page.getByLabel("Tell me what happened").fill("A person collapsed after a collision and needs urgent help.");
+  await page.getByRole("button", { name: "Review report" }).click();
   await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({ timeout: 15000 });
-  await page.getByRole("button", { name: "Looks right" }).click();
+  expect(mocks.getDispatchRequests()).toBe(0);
+  await page.getByRole("button", { name: "Send for help" }).click();
 
   await expect(page.getByRole("heading", { name: "Help was not confirmed." })).toBeVisible({ timeout: 20000 });
+  expect(mocks.getDispatchRequests()).toBe(1);
   await expect(page.getByText("Call local emergency services now").first()).toBeVisible();
+  await page.getByText("Details", { exact: true }).click();
   await expect(await page.getByText("Not confirmed", { exact: true }).count()).toBeGreaterThan(0);
 
   const finalText = await page.locator("body").innerText();

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { facilityResponsesFromEvidence, inferHandoffStatus, isFailedCallEndReason } from "@/lib/handoff";
 
 function getTwilioAuth() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -13,71 +14,11 @@ function getTwilioAuth() {
   };
 }
 
-function isFailedVapiEndReason(endedReason?: string) {
-  if (!endedReason) return false;
-
-  return (
-    endedReason.startsWith("call.start.error") ||
-    endedReason === "customer-busy" ||
-    endedReason === "customer-did-not-answer" ||
-    endedReason === "customer-cancelled" ||
-    endedReason === "customer-rejected" ||
-    endedReason === "phone-call-provider-bypass-enabled-but-no-call-received" ||
-    endedReason.includes("no-answer") ||
-    endedReason.includes("busy")
-  );
-}
-
-function textSuggestsAcceptance(text?: string) {
-  if (!text) return false;
-  return /\b(yes|accepted|can receive|we can receive|available|send them|bring them|take over|confirmed)\b/i.test(text);
-}
-
-function textSuggestsRejection(text?: string) {
-  if (!text) return false;
-  return /\b(no|not available|full|cannot receive|can't receive|unavailable|try another|do not send|not possible)\b/i.test(text);
-}
-
-function inferHandoffStatus(input: {
-  status?: string;
-  endedReason?: string;
-  transcript?: string;
-  summary?: string;
-}) {
-  const evidence = [input.summary, input.transcript].filter(Boolean).join("\n");
-
-  if (isFailedVapiEndReason(input.endedReason) || ["busy", "failed", "no-answer", "canceled"].includes(input.status || "")) {
-    return "failed";
-  }
-
-  if (input.status === "in-progress") return "connected";
-  if (input.status === "queued" || input.status === "ringing") return "calling";
-
-  if (input.status === "ended" || input.status === "completed") {
-    if (textSuggestsAcceptance(evidence)) return "accepted";
-    if (textSuggestsRejection(evidence)) return "not_confirmed";
-    return "not_confirmed";
-  }
-
-  return "calling";
-}
-
-function facilityResponsesFromEvidence(handoffStatus: string, transcript?: string, summary?: string) {
-  const evidence = summary || transcript;
-  const responseStatus =
-    handoffStatus === "accepted"
-      ? "yes"
-      : handoffStatus === "not_confirmed"
-        ? "unknown"
-        : handoffStatus === "failed"
-          ? "unknown"
-          : "pending";
-
-  return ["receive_now", "capability_available", "er_capacity", "ambulance_handoff"].map((questionId) => ({
-    questionId,
-    status: responseStatus,
-    evidence: responseStatus === "pending" ? undefined : evidence,
-  }));
+function publicEvidenceLabel(handoffStatus: string) {
+  if (handoffStatus === "accepted") return "The receiver clearly said they can receive the person.";
+  if (handoffStatus === "not_confirmed") return "The call did not produce a clear yes.";
+  if (handoffStatus === "failed") return "The call did not complete.";
+  return undefined;
 }
 
 export async function GET(request: NextRequest) {
@@ -117,12 +58,10 @@ export async function GET(request: NextRequest) {
       call.status === "completed" ? "ended" : failedStatuses.has(call.status || "") ? "failed" : call.status;
 
 	    return NextResponse.json({
-	      id: call.sid,
 	      status: normalizedStatus,
-	      endedReason: call.status,
-	      durationSeconds: call.duration ? Number(call.duration) : undefined,
-	      callProvider: "twilio",
 	      handoffStatus: inferHandoffStatus({ status: call.status }),
+	      evidenceLabel: publicEvidenceLabel(inferHandoffStatus({ status: call.status })),
+	      retryable: normalizedStatus === "failed",
 	      facilityResponses: facilityResponsesFromEvidence(inferHandoffStatus({ status: call.status })),
 	    });
 	  }
@@ -153,7 +92,7 @@ export async function GET(request: NextRequest) {
     transcript?: string;
     summary?: string;
   };
-  const vapiCallFailed = isFailedVapiEndReason(call.endedReason);
+  const vapiCallFailed = isFailedCallEndReason(call.endedReason);
   const normalizedStatus = vapiCallFailed ? "failed" : call.status;
   const handoffStatus = inferHandoffStatus({
     status: normalizedStatus,
@@ -163,14 +102,10 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({
-    id: call.id,
     status: normalizedStatus,
-    endedReason: call.endedReason,
-    diagnosticCode: vapiCallFailed ? call.endedReason : undefined,
-    transcript: call.transcript,
-    summary: call.summary,
-    callProvider: "vapi",
     handoffStatus,
-    facilityResponses: facilityResponsesFromEvidence(handoffStatus, call.transcript, call.summary),
+    evidenceLabel: publicEvidenceLabel(handoffStatus),
+    retryable: handoffStatus === "failed",
+    facilityResponses: facilityResponsesFromEvidence(handoffStatus, publicEvidenceLabel(handoffStatus)),
   });
 }

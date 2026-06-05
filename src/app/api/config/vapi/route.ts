@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getResponseLinePhone } from "@/lib/response-line";
 
 type VapiPhoneNumber = {
   id?: string;
@@ -93,7 +94,7 @@ function getTwilioNumber() {
 }
 
 function getOperatorPhone() {
-  return normalizeE164Phone(process.env.PULSE_OPERATOR_PHONE || process.env.PULSE_RECEIVING_PHONE);
+  return getResponseLinePhone();
 }
 
 function summarizePhone(phone: VapiPhoneNumber | null, expectedId?: string) {
