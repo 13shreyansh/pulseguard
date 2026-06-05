@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getClientKey, issueDispatchSession } from "@/lib/dispatch-session";
+import { NextResponse } from "next/server";
+import { issueDispatchSession } from "@/lib/dispatch-session";
 
-export async function POST(request: NextRequest) {
-  const clientKey = getClientKey(request);
+export async function POST() {
   return NextResponse.json({
-    token: issueDispatchSession(clientKey),
+    token: issueDispatchSession(),
     expiresInSeconds: 600,
   });
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkDispatchCooldown, getClientKey, verifyDispatchSession } from "@/lib/dispatch-session";
 import { getResponseLinePhone } from "@/lib/response-line";
 
+export const maxDuration = 60;
+
 type TriageResult = {
   title: string;
   emergencyType: string;
@@ -524,7 +526,7 @@ async function waitForTwilioMessageToLeave(twilio: ReturnType<typeof getTwilioAu
   const failedStatuses = new Set(["failed", "undelivered"]);
   let latestStatus = "queued";
 
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     if (attempt > 0) await wait(1000);
     const message = await fetchTwilioMessageStatus(twilio, sid);
     latestStatus = message?.status || latestStatus;

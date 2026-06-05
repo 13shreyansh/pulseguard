@@ -1316,22 +1316,22 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-[#15242d]">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#f6f8fb] text-[#111827]">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-3 py-2">
           <BrandHeader />
           {step !== "start" && (
             <button
               type="button"
               onClick={reset}
-              className="min-h-11 rounded-full border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] shadow-sm transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
+              className="min-h-11 rounded-lg border border-[#c7d2df] bg-white px-4 text-sm font-semibold text-[#475569] shadow-sm transition hover:border-[#c81e36] hover:text-[#c81e36] focus:outline-none focus:ring-4 focus:ring-[rgba(200,30,54,0.16)]"
             >
               Start new
             </button>
           )}
         </header>
 
-        <section className="flex flex-1 items-stretch justify-center py-4 lg:py-8">
+        <section className="flex flex-1 items-stretch justify-center py-4 lg:py-6">
           {step === "start" && (
             <StartScreen
               locationError={locationError}
@@ -1411,12 +1411,12 @@ export default function Home() {
 function BrandHeader() {
   return (
     <div className="flex items-center gap-3">
-      <span className="grid size-11 place-items-center rounded-lg bg-[#d92d38] text-white shadow-lg shadow-[rgba(217,45,56,0.24)]">
+      <span className="grid size-11 place-items-center rounded-lg bg-[#c81e36] text-white shadow-[0_14px_30px_rgba(143,24,48,0.18)]">
         <Siren className="size-6" />
       </span>
       <div>
-        <p className="text-lg font-black tracking-[0.2em] text-[#15242d]">PULSE</p>
-        <p className="text-xs font-bold text-[#6f7b84]">Emergency help</p>
+        <p className="text-lg font-semibold tracking-[0.16em] text-[#111827]">PULSE</p>
+        <p className="text-xs font-bold text-[#64748b]">Emergency help</p>
       </div>
     </div>
   );
@@ -1434,16 +1434,16 @@ function StartScreen({
   const isLocating = locationState === "locking";
 
   return (
-    <div className="w-full max-w-6xl">
-      <section className="grid min-h-[calc(100vh-10rem)] overflow-hidden rounded-lg border border-[#e5e7eb] bg-white shadow-xl shadow-slate-200/70 lg:grid-rows-[minmax(0,1fr)_62px]">
+    <div className="w-full max-w-7xl">
+      <section className="grid min-h-[calc(100vh-9rem)] overflow-hidden rounded-lg border border-[#dde5ee] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)] lg:grid-rows-[minmax(0,1fr)_62px]">
         <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-          <div className="flex flex-col justify-center p-5 sm:p-8 lg:border-r lg:border-[#e5e7eb] lg:p-10">
+          <div className="flex flex-col justify-center p-5 sm:p-8 lg:border-r lg:border-[#dde5ee] lg:p-10">
             <div className="flex items-start justify-between gap-4 lg:block">
               <div>
-                <h1 className="text-5xl font-black leading-none tracking-normal text-[#15242d] sm:text-6xl lg:text-7xl">
+                <h1 className="text-5xl font-semibold leading-none tracking-normal text-[#111827] sm:text-6xl lg:text-7xl">
                   Get help now
                 </h1>
-                <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#53616b] sm:text-lg sm:leading-8 lg:text-xl lg:leading-9">
+                <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#475569] sm:text-lg sm:leading-8 lg:text-xl lg:leading-9">
                   I’ll get your location, listen to what happened, and contact help while you stay with them.
                 </p>
               </div>
@@ -1453,9 +1453,9 @@ function StartScreen({
             </div>
 
             {locationError && (
-              <div className="mt-6 rounded-lg border border-[#f4b5b7] bg-[#fff2f1] p-4">
+              <div className="mt-6 rounded-lg border border-[#efb4bd] bg-[#fff4f5] p-4">
                 <div className="flex gap-3">
-                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[#d92d38]" />
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-[#c81e36]" />
                   <p className="text-sm font-bold leading-6 text-[#7b2a31]">{locationError}</p>
                 </div>
               </div>
@@ -1465,25 +1465,25 @@ function StartScreen({
               type="button"
               onClick={onStart}
               disabled={isLocating}
-              className="mt-10 flex min-h-28 w-full items-center justify-center rounded-lg bg-[#d92d38] text-center text-white shadow-xl shadow-[rgba(217,45,56,0.22)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-8 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6] lg:max-w-xl"
+              className="mt-10 flex min-h-28 w-full items-center justify-center rounded-lg bg-[#c81e36] text-center text-white shadow-[0_24px_46px_rgba(143,24,48,0.22)] transition hover:bg-[#a61b32] focus:outline-none focus:ring-8 focus:ring-[rgba(200,30,54,0.16)] disabled:bg-[#d8a1aa] lg:max-w-xl"
             >
               <span className="flex items-center justify-center gap-3 px-4">
                 {isLocating ? <Loader2 className="size-8 animate-spin" /> : <PhoneCall className="size-8" />}
-                <span className="text-xl font-black leading-6 sm:text-2xl">{isLocating ? "Getting location" : "Start Emergency Help"}</span>
+                <span className="text-xl font-semibold leading-6 sm:text-2xl">{isLocating ? "Getting location" : "Start Emergency Help"}</span>
               </span>
             </button>
 
-            <p className="mt-6 max-w-xl text-sm font-bold leading-6 text-[#53616b]">
+            <p className="mt-6 max-w-xl text-sm font-bold leading-6 text-[#475569]">
               If there is immediate danger, call local emergency services now too.
             </p>
           </div>
 
-          <aside className="grid content-center gap-4 border-t border-[#e5e7eb] bg-[#f8fafc] p-5 sm:p-8 lg:border-t-0 lg:p-10">
+          <aside className="grid content-center gap-4 border-t border-[#dde5ee] bg-[#f6f8fb] p-5 sm:p-8 lg:border-t-0 lg:p-10">
             <div className="hidden justify-end lg:flex">
               <LocationPill location={null} locationState={locationState} />
             </div>
             <div>
-              <p className="text-2xl font-black text-[#d92d38]">What happens next</p>
+              <p className="text-2xl font-semibold text-[#1d4ed8]">What happens next</p>
               <div className="mt-6 grid gap-5">
                 <BystanderStep icon={MapPin} title="Share location" detail="I’ll ask for your location so help knows where to go." />
                 <BystanderStep icon={Mic} title="Tell me what happened" detail="Speak or type. You can fix the report before sending." />
@@ -1491,12 +1491,12 @@ function StartScreen({
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
+            <div className="rounded-lg border border-[#d8e3f1] bg-white p-5 shadow-sm">
               <div className="flex gap-3">
-                <Siren className="mt-1 size-8 shrink-0 text-[#d92d38]" />
+                <Siren className="mt-1 size-8 shrink-0 text-[#1d4ed8]" />
                 <div>
-                  <h2 className="text-2xl font-black text-[#15242d]">I’ll handle the background.</h2>
-                  <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">
+                  <h2 className="text-2xl font-semibold text-[#111827]">I’ll handle the background.</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">
                     You focus on the person. Details about calls, care options, and evidence stay collapsed unless you open them.
                   </p>
                 </div>
@@ -1505,17 +1505,17 @@ function StartScreen({
           </aside>
         </div>
 
-        <div className="grid gap-3 border-t border-[#e5e7eb] bg-white px-5 py-3 text-sm font-bold leading-5 text-[#53616b] sm:grid-cols-3 sm:items-center sm:px-8">
+        <div className="grid gap-3 border-t border-[#dde5ee] bg-white px-5 py-3 text-sm font-bold leading-5 text-[#475569] sm:grid-cols-3 sm:items-center sm:px-8">
           <div className="flex items-center gap-3">
-            <Lock className="size-5 text-[#53616b]" />
+            <Lock className="size-5 text-[#475569]" />
             <p>Your data stays private.</p>
           </div>
           <div className="flex items-center gap-3">
-            <ShieldCheck className="size-5 text-[#53616b]" />
+            <ShieldCheck className="size-5 text-[#475569]" />
             <p>Simple steps stay visible.</p>
           </div>
           <div className="flex items-center gap-3">
-            <Clock3 className="size-5 text-[#53616b]" />
+            <Clock3 className="size-5 text-[#475569]" />
             <p>Help gets details faster.</p>
           </div>
         </div>
@@ -1568,31 +1568,31 @@ function ListeningScreen({
           : "Ready";
 
   return (
-    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-7">
+    <div className="grid w-full max-w-7xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="rounded-lg border border-[#dde5ee] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <StatusBadge tone={speechState === "listening" || speechState === "connecting" ? "red" : microphoneFallback ? "warning" : "green"} icon={Mic} label={listenLabel} />
-            <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+            <StatusBadge tone={speechState === "listening" || speechState === "connecting" ? "blue" : microphoneFallback ? "warning" : "green"} icon={Mic} label={listenLabel} />
+            <h1 className="mt-5 text-4xl font-semibold tracking-normal text-[#111827] sm:text-5xl">
               I’m listening
             </h1>
-            <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+            <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#475569]">
               Tell me what happened. You can fix the text here, then send it for help.
             </p>
           </div>
           <LocationPill location={incidentLocation} locationState={locationState} />
         </div>
 
-        <div className="mt-6 rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
+        <div className="mt-6 rounded-lg border border-[#d8e3f1] bg-[#f8fbff] p-5">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <div className={`pulse-orb grid size-24 shrink-0 place-items-center rounded-full text-white ${speechState === "listening" ? "" : "opacity-80"}`}>
               {speechState === "connecting" || speechState === "processing" ? <Loader2 className="size-9 animate-spin" /> : <Mic className="size-10" />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xl font-black text-[#15242d]">
+              <p className="text-xl font-semibold text-[#111827]">
                 {speechState === "listening" ? "Listening now" : speechState === "connecting" ? "Getting the microphone ready" : microphoneFallback ? "Typing is okay" : "Ready when you are"}
               </p>
-              <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">
+              <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">
                 {silenceNotice || "Say what you see: injury, breathing, bleeding, and where the person is."}
               </p>
               <div className="mt-4 flex h-12 items-center gap-2" aria-label="Microphone volume">
@@ -1612,7 +1612,7 @@ function ListeningScreen({
         </div>
 
         {!locked && (
-          <div className="mt-6 rounded-lg border border-[#f4b5b7] bg-[#fff2f1] p-4">
+          <div className="mt-6 rounded-lg border border-[#efb4bd] bg-[#fff4f5] p-4">
             <p className="text-sm font-bold leading-6 text-[#7b2a31]">
               {locationError || "Location is needed to send help to the right place."}
             </p>
@@ -1620,7 +1620,7 @@ function ListeningScreen({
               type="button"
               onClick={onRequestLocation}
               disabled={locationState === "locking"}
-              className="mt-4 min-h-12 rounded-lg bg-[#d92d38] px-5 text-sm font-black text-white transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+              className="mt-4 min-h-12 rounded-lg bg-[#c81e36] px-5 text-sm font-semibold text-white transition hover:bg-[#a61b32] focus:outline-none focus:ring-4 focus:ring-[rgba(200,30,54,0.16)] disabled:bg-[#d8a1aa]"
             >
               {locationState === "locking" ? "Getting location" : "Share my location"}
             </button>
@@ -1628,14 +1628,14 @@ function ListeningScreen({
         )}
 
         {microphoneFallback && locked && (
-          <div className="mt-6 rounded-lg border border-[#ecd8a8] bg-[#fff9ea] p-4">
+          <div className="mt-6 rounded-lg border border-[#ead8a2] bg-[#fff8e6] p-4">
             <p className="text-sm font-bold leading-6 text-[#705616]">
               You can type what happened. Pulse can still share your location and call for help.
             </p>
           </div>
         )}
 
-        <label htmlFor="incident-report" className="mt-7 block text-sm font-black text-[#53616b]">
+        <label htmlFor="incident-report" className="mt-7 block text-sm font-semibold text-[#475569]">
           Tell me what happened
         </label>
         <textarea
@@ -1645,7 +1645,7 @@ function ListeningScreen({
           onChange={(event) => setReport(event.target.value)}
           placeholder={locked ? "Say or type what happened, where the person is, and what you can see." : "Share your location first."}
           disabled={!locked || speechState === "processing"}
-          className="mt-3 min-h-72 w-full resize-none rounded-lg border border-[#cbd5e1] bg-[#f8fafc] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#94a3b8] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:bg-[#f1f5f9] disabled:text-[#64748b]"
+          className="mt-3 min-h-72 w-full resize-none rounded-lg border border-[#c7d2df] bg-white p-5 text-xl font-semibold leading-9 text-[#111827] outline-none transition placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:ring-4 focus:ring-[rgba(37,99,235,0.14)] disabled:bg-[#edf2f7] disabled:text-[#64748b]"
         />
 
         <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -1653,7 +1653,7 @@ function ListeningScreen({
             type="button"
             onClick={onRestartListening}
             disabled={!locked}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)] disabled:text-[#94a3b8]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#c7d2df] bg-white px-4 text-sm font-semibold text-[#475569] transition hover:border-[#2563eb] hover:text-[#1d4ed8] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)] disabled:text-[#94a3b8]"
           >
             <RefreshCw className="size-4" />
             Restart listening
@@ -1662,7 +1662,7 @@ function ListeningScreen({
             type="button"
             onClick={onProcess}
             disabled={!canProcess || speechState === "processing"}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#d92d38] px-5 text-base font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#c81e36] px-5 text-base font-semibold text-white shadow-[0_16px_34px_rgba(143,24,48,0.18)] transition hover:bg-[#a61b32] focus:outline-none focus:ring-4 focus:ring-[rgba(200,30,54,0.16)] disabled:bg-[#d8a1aa]"
           >
             {speechState === "processing" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             Review report
@@ -1671,17 +1671,17 @@ function ListeningScreen({
       </section>
 
       <aside className="grid content-start gap-4">
-        <div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
-          <p className="text-sm font-black text-[#d92d38]">Keep it simple</p>
+        <div className="rounded-lg border border-[#dde5ee] bg-[#f6f8fb] p-5">
+          <p className="text-sm font-semibold text-[#1d4ed8]">Keep it simple</p>
           <div className="mt-5 grid gap-5">
             <BystanderStep icon={Mic} title="I’m listening" detail="Live text appears here. Type over anything that is wrong." />
             <BystanderStep icon={MapPin} title="Location status" detail={locked ? "Location is ready to share." : "Share location before sending."} />
             <BystanderStep icon={Send} title="Review first" detail="Nothing is sent until you confirm the report." />
           </div>
         </div>
-        <div className="rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
-          <p className="text-lg font-black text-[#15242d]">Stay with them. Keep them still.</p>
-          <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">If they stop breathing normally, call local emergency services now.</p>
+        <div className="rounded-lg border border-[#d8e3f1] bg-white p-5 shadow-sm">
+          <p className="text-lg font-semibold text-[#111827]">Stay with them. Keep them still.</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">If they stop breathing normally, call local emergency services now.</p>
         </div>
       </aside>
     </div>
@@ -1713,17 +1713,17 @@ function ConfirmReportScreen({
         : "You can edit this before Pulse sends it.";
 
   return (
-    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-7">
+    <div className="grid w-full max-w-7xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="rounded-lg border border-[#dde5ee] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
         <StatusBadge tone="green" icon={CheckCircle2} label="Review before sending" />
-        <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+        <h1 className="mt-5 text-4xl font-semibold tracking-normal text-[#111827] sm:text-5xl">
           This is what I heard.
         </h1>
-        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#475569]">
           Check this once. Pulse will share your location and contact help only after you confirm.
         </p>
 
-        <label htmlFor="confirmed-report" className="mt-7 block text-sm font-black text-[#53616b]">
+        <label htmlFor="confirmed-report" className="mt-7 block text-sm font-semibold text-[#475569]">
           I heard this
         </label>
         <textarea
@@ -1731,15 +1731,15 @@ function ConfirmReportScreen({
           id="confirmed-report"
           value={report}
           onChange={(event) => setReport(event.target.value)}
-          className="mt-3 min-h-72 w-full resize-none rounded-lg border border-[#cbd5e1] bg-[#f8fafc] p-5 text-xl font-bold leading-9 text-[#15242d] outline-none transition placeholder:text-[#94a3b8] focus:border-[#d92d38] focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+          className="mt-3 min-h-72 w-full resize-none rounded-lg border border-[#c7d2df] bg-white p-5 text-xl font-semibold leading-9 text-[#111827] outline-none transition placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]"
         />
-        <p className="mt-3 text-sm font-bold leading-6 text-[#53616b]">{sourceText}</p>
+        <p className="mt-3 text-sm font-bold leading-6 text-[#475569]">{sourceText}</p>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <button
             type="button"
             onClick={onFix}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#c7d2df] bg-white px-4 text-sm font-semibold text-[#475569] transition hover:border-[#2563eb] hover:text-[#1d4ed8] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]"
           >
             Edit more
           </button>
@@ -1747,7 +1747,7 @@ function ConfirmReportScreen({
             type="button"
             onClick={onConfirm}
             disabled={report.trim().length < 12}
-            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#d92d38] px-5 text-base font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)] disabled:bg-[#d7aaa6]"
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#c81e36] px-5 text-base font-semibold text-white shadow-[0_16px_34px_rgba(143,24,48,0.18)] transition hover:bg-[#a61b32] focus:outline-none focus:ring-4 focus:ring-[rgba(200,30,54,0.16)] disabled:bg-[#d8a1aa]"
           >
             <Send className="size-4" />
             Send for help
@@ -1757,9 +1757,9 @@ function ConfirmReportScreen({
 
       <aside className="grid content-start gap-4">
         <LocationCard incidentLocation={incidentLocation} compact />
-        <div className="rounded-lg border border-[#f3b0b4] bg-[#fff2f1] p-5">
-          <p className="text-lg font-black text-[#15242d]">Stay with them. Keep them still.</p>
-          <p className="mt-2 text-sm font-bold leading-6 text-[#53616b]">
+        <div className="rounded-lg border border-[#d8e3f1] bg-white p-5 shadow-sm">
+          <p className="text-lg font-semibold text-[#111827]">Stay with them. Keep them still.</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">
             This review step prevents wrong speech text from being sent for help.
           </p>
         </div>
@@ -1786,21 +1786,21 @@ function SendingScreen({
   const currentIndex = phaseIndex(sendPhase);
 
   return (
-    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <section className="rounded-lg border border-[#e5e7eb] bg-white p-6 shadow-xl shadow-slate-200/70 sm:p-8">
+    <div className="grid w-full max-w-7xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="rounded-lg border border-[#dde5ee] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-8">
         <StatusBadge tone="red" icon={PhoneCall} label="Sending now" />
-        <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+        <h1 className="mt-5 text-4xl font-semibold tracking-normal text-[#111827] sm:text-5xl">
           I’m contacting help
         </h1>
-        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">
+        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#475569]">
           Stay with them. Keep them still. Keep this screen open while I share the details.
         </p>
         <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
       </section>
 
       <aside className="grid content-start gap-4">
-        <div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
-          <p className="text-sm font-black text-[#d92d38]">Progress</p>
+        <div className="rounded-lg border border-[#dde5ee] bg-[#f6f8fb] p-5">
+          <p className="text-sm font-semibold text-[#1d4ed8]">Progress</p>
           <div className="mt-5 grid gap-3">
             {statusSteps.map((step, index) => {
               const active = currentIndex === index;
@@ -1810,24 +1810,24 @@ function SendingScreen({
                   key={step.phase}
                   className={`flex items-center gap-4 rounded-lg border p-4 ${
                     active
-                      ? "border-[#f3b0b4] bg-[#fff2f1]"
+                      ? "border-[#d8e3f1] bg-[#f8fbff]"
                       : complete
-                        ? "border-[#bfe4cf] bg-[#f0fbf4]"
-                        : "border-[#e5e7eb] bg-white"
+                        ? "border-[#bbdfc8] bg-[#eef9f2]"
+                        : "border-[#dde5ee] bg-white"
                   }`}
                 >
-                  <span className={`grid size-10 place-items-center rounded-full ${complete ? "bg-[#35a66a] text-white" : active ? "bg-[#d92d38] text-white" : "bg-[#e5e7eb] text-[#6f7b84]"}`}>
+                  <span className={`grid size-10 place-items-center rounded-lg ${complete ? "bg-[#15803d] text-white" : active ? "bg-[#2563eb] text-white" : "bg-[#dde5ee] text-[#64748b]"}`}>
                     {complete ? <CheckCircle2 className="size-5" /> : active ? <Loader2 className="size-5 animate-spin" /> : index + 1}
                   </span>
-                  <p className="text-base font-black text-[#15242d]">{step.label}</p>
+                  <p className="text-base font-semibold text-[#111827]">{step.label}</p>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <details className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-4">
-          <summary className="cursor-pointer text-sm font-black text-[#15242d] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]">
+        <details className="rounded-lg border border-[#dde5ee] bg-[#f6f8fb] p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-[#111827] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]">
             Details
           </summary>
           <div className="mt-4 grid gap-4">
@@ -1835,9 +1835,9 @@ function SendingScreen({
             <CareCandidateCard hospital={hospitals[0]} />
           </div>
 
-          <div className="mt-4 rounded-lg border border-[#e5e7eb] bg-white p-5">
-            <p className="text-sm font-black text-[#53616b]">What happened</p>
-            <p className="mt-3 line-clamp-6 text-sm font-semibold leading-6 text-[#15242d]">{report}</p>
+          <div className="mt-4 rounded-lg border border-[#dde5ee] bg-white p-5">
+            <p className="text-sm font-semibold text-[#475569]">What happened</p>
+            <p className="mt-3 line-clamp-6 text-sm font-semibold leading-6 text-[#111827]">{report}</p>
           </div>
         </details>
       </aside>
@@ -1869,20 +1869,20 @@ function HelpNotifiedScreen({
 	  const coordinationTimeline = getCoordinationTimeline(dispatchCall, sendPhase);
 
   return (
-    <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <section className="rounded-lg border border-[#e5e7eb] bg-white p-5 shadow-xl shadow-slate-200/70 sm:p-7">
+    <div className="grid w-full max-w-7xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="rounded-lg border border-[#dde5ee] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
         <StatusBadge tone={isFailure ? "danger" : "green"} icon={isFailure ? AlertTriangle : CheckCircle2} label={isFailure ? "Needs attention" : "Help contacted"} />
-        <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
+        <h1 className="mt-5 text-4xl font-semibold tracking-normal text-[#111827] sm:text-5xl">
           {helpStatus.title}
         </h1>
-        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#53616b]">{helpStatus.detail}</p>
+        <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-[#475569]">{helpStatus.detail}</p>
 
         <FirstAidInfographic guidanceImage={guidanceImage} triage={triage} />
       </section>
 
       <aside className="grid content-start gap-4">
-        <details className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-4">
-          <summary className="cursor-pointer text-sm font-black text-[#15242d] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]">
+        <details className="mt-6 rounded-lg border border-[#dde5ee] bg-[#f6f8fb] p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-[#111827] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]">
             Details
           </summary>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1897,7 +1897,7 @@ function HelpNotifiedScreen({
           <button
             type="button"
             onClick={onAddDetail}
-            className="min-h-14 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+            className="min-h-14 rounded-lg border border-[#c7d2df] bg-white px-4 text-sm font-semibold text-[#475569] transition hover:border-[#2563eb] hover:text-[#1d4ed8] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]"
           >
             Add new detail
           </button>
@@ -1906,7 +1906,7 @@ function HelpNotifiedScreen({
               href={getLocationUrl(incidentLocation)}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#53616b] transition hover:border-[#d92d38] hover:text-[#d92d38] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.14)]"
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-lg border border-[#c7d2df] bg-white px-4 text-sm font-semibold text-[#475569] transition hover:border-[#2563eb] hover:text-[#1d4ed8] focus:outline-none focus:ring-4 focus:ring-[rgba(37,99,235,0.14)]"
             >
               <Navigation className="size-4" />
               Show my location
@@ -1915,7 +1915,7 @@ function HelpNotifiedScreen({
           <button
             type="button"
             onClick={onReset}
-            className="min-h-14 rounded-lg bg-[#d92d38] px-5 text-sm font-black text-white shadow-lg shadow-[rgba(217,45,56,0.18)] transition hover:bg-[#b8232e] focus:outline-none focus:ring-4 focus:ring-[rgba(217,45,56,0.18)]"
+            className="min-h-14 rounded-lg bg-[#c81e36] px-5 text-sm font-semibold text-white shadow-[0_16px_34px_rgba(143,24,48,0.18)] transition hover:bg-[#a61b32] focus:outline-none focus:ring-4 focus:ring-[rgba(200,30,54,0.16)]"
           >
             Start new emergency
           </button>
@@ -1932,19 +1932,21 @@ function StatusBadge({
 }: {
   icon: LucideIcon;
   label: string;
-  tone: "green" | "red" | "warning" | "danger";
+  tone: "green" | "red" | "warning" | "danger" | "blue";
 }) {
   const className =
     tone === "green"
-      ? "bg-[#f0fbf4] text-[#1e7b4a]"
+      ? "bg-[#eef9f2] text-[#166534]"
+      : tone === "blue"
+        ? "bg-[#eef5ff] text-[#1d4ed8]"
       : tone === "danger"
-        ? "bg-[#fff2f1] text-[#a51d2a]"
+        ? "bg-[#fff4f5] text-[#8f1830]"
         : tone === "warning"
-          ? "bg-[#fff9ea] text-[#816116]"
-          : "bg-[#fff2f1] text-[#a51d2a]";
+          ? "bg-[#fff8e6] text-[#76520b]"
+          : "bg-[#fff4f5] text-[#8f1830]";
 
   return (
-    <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black ${className}`}>
+    <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${className}`}>
       <Icon className="size-4" />
       {label}
     </span>
@@ -1962,12 +1964,12 @@ function BystanderStep({
 }) {
   return (
     <div className="flex gap-4">
-      <span className="grid size-12 shrink-0 place-items-center rounded-lg border border-[#e5e7eb] bg-white text-[#d92d38]">
+      <span className="grid size-12 shrink-0 place-items-center rounded-lg border border-[#d8e3f1] bg-[#f8fbff] text-[#1d4ed8]">
         <Icon className="size-6" />
       </span>
       <div>
-        <h2 className="text-lg font-black text-[#15242d]">{title}</h2>
-        <p className="mt-1 text-sm font-semibold leading-6 text-[#53616b]">{detail}</p>
+        <h2 className="text-lg font-semibold text-[#111827]">{title}</h2>
+        <p className="mt-1 text-sm font-semibold leading-6 text-[#475569]">{detail}</p>
       </div>
     </div>
   );
@@ -1982,7 +1984,7 @@ function LocationPill({
 }) {
   if (locationState === "locked" && location) {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-[#f0fbf4] px-4 py-2 text-sm font-black text-[#1e7b4a]">
+      <span className="inline-flex items-center gap-2 rounded-full bg-[#eef9f2] px-4 py-2 text-sm font-semibold text-[#166534]">
         <MapPin className="size-4" />
         Location shared
       </span>
@@ -1991,7 +1993,7 @@ function LocationPill({
 
   if (locationState === "locking") {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-[#fff9ea] px-4 py-2 text-sm font-black text-[#816116]">
+      <span className="inline-flex items-center gap-2 rounded-full bg-[#fff8e6] px-4 py-2 text-sm font-semibold text-[#76520b]">
         <Loader2 className="size-4 animate-spin" />
         Getting location
       </span>
@@ -1999,7 +2001,7 @@ function LocationPill({
   }
 
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-[#fff2f1] px-4 py-2 text-sm font-black text-[#a51d2a]">
+    <span className="inline-flex items-center gap-2 rounded-full bg-[#fff4f5] px-4 py-2 text-sm font-semibold text-[#8f1830]">
       <MapPin className="size-4" />
       Location needed
     </span>
@@ -2014,23 +2016,23 @@ function LocationCard({
   incidentLocation: IncidentLocation | null;
 }) {
   return (
-    <div className={`overflow-hidden rounded-lg border border-[#e5e7eb] bg-white ${compact ? "p-4" : "p-5"}`}>
-      <div className="pulse-mini-map relative min-h-36 overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
-        <div className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#d92d38] text-white shadow-xl shadow-[rgba(217,45,56,0.28)]">
+    <div className={`overflow-hidden rounded-lg border border-[#dde5ee] bg-white ${compact ? "p-4" : "p-5"}`}>
+      <div className="pulse-mini-map relative min-h-36 overflow-hidden rounded-lg border border-[#dde5ee] bg-[#f6f8fb]">
+        <div className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-lg bg-[#c81e36] text-white shadow-[0_16px_34px_rgba(143,24,48,0.2)]">
           <MapPin className="size-7" />
         </div>
       </div>
       <div className="mt-4 flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#f0fbf4] text-[#1e7b4a]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#eef9f2] text-[#166534]">
           <CheckCircle2 className="size-5" />
         </span>
         <div>
-          <p className="text-sm font-black text-[#15242d]">Your location was shared</p>
-          <p className="mt-1 text-sm font-semibold leading-6 text-[#53616b]">
+          <p className="text-sm font-semibold text-[#111827]">Your location was shared</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-[#475569]">
             {incidentLocation ? "Open your location if you need to guide someone nearby." : "Pulse is waiting for your location."}
           </p>
           {incidentLocation && (
-            <p className="mt-2 text-sm font-bold text-[#6f7b84]">{formatLocationLabel(incidentLocation)}</p>
+            <p className="mt-2 text-sm font-bold text-[#64748b]">{formatLocationLabel(incidentLocation)}</p>
           )}
         </div>
       </div>
@@ -2040,18 +2042,18 @@ function LocationCard({
 
 function CareCandidateCard({ hospital }: { hospital?: HospitalCandidate }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[#e5e7eb] bg-white p-5">
+    <div className="overflow-hidden rounded-lg border border-[#dde5ee] bg-white p-5">
       <div className="flex items-start gap-3">
-        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#f0fbf4] text-[#1e7b4a]">
+        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#eef9f2] text-[#166534]">
           <Hospital className="size-6" />
         </span>
         <div>
-          <p className="text-sm font-black text-[#15242d]">Nearby emergency care</p>
-          <p className="mt-1 text-sm font-semibold leading-6 text-[#53616b]">
+          <p className="text-sm font-semibold text-[#111827]">Nearby emergency care</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-[#475569]">
             {hospital ? hospital.name : "Pulse is finding the nearest suitable emergency care."}
           </p>
           {hospital && (
-            <p className="mt-2 text-sm font-bold text-[#6f7b84]">
+            <p className="mt-2 text-sm font-bold text-[#64748b]">
               {hospital.travelTimeMinutes ? `${Math.round(hospital.travelTimeMinutes)} min drive` : `${hospital.distanceKm} km away`}
             </p>
           )}
@@ -2069,13 +2071,13 @@ function CoordinationTimelinePanel({
   session?: CoordinationSession;
 }) {
   return (
-    <div className="mt-6 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
+    <div className="mt-6 rounded-lg border border-[#dde5ee] bg-[#f6f8fb] p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-black text-[#d92d38]">Help progress</p>
-          <h2 className="mt-1 text-2xl font-black text-[#15242d]">Where things stand.</h2>
+          <p className="text-sm font-semibold text-[#c81e36]">Help progress</p>
+          <h2 className="mt-1 text-2xl font-semibold text-[#111827]">Where things stand.</h2>
         </div>
-        <Radio className="size-7 text-[#35a66a]" />
+        <Radio className="size-7 text-[#15803d]" />
       </div>
 
       <div className="mt-5 grid gap-3">
@@ -2083,21 +2085,21 @@ function CoordinationTimelinePanel({
           const isDone = item.state === "done";
           const needsAttention = item.state === "attention";
           return (
-            <div key={item.id} className="flex items-center gap-4 rounded-lg border border-[#e5e7eb] bg-white p-4">
+            <div key={item.id} className="flex items-center gap-4 rounded-lg border border-[#dde5ee] bg-white p-4">
               <span
                 className={`grid size-10 shrink-0 place-items-center rounded-lg ${
                   isDone
-                    ? "bg-[#35a66a] text-white"
+                    ? "bg-[#15803d] text-white"
                     : needsAttention
-                      ? "bg-[#fff2f1] text-[#d92d38]"
-                      : "bg-[#fff9ea] text-[#816116]"
+                      ? "bg-[#fff4f5] text-[#c81e36]"
+                      : "bg-[#fff8e6] text-[#76520b]"
                 }`}
               >
                 {isDone ? <CheckCircle2 className="size-5" /> : needsAttention ? <AlertTriangle className="size-5" /> : <Loader2 className="size-5 animate-spin" />}
               </span>
               <div>
-                <p className="text-sm font-black text-[#15242d]">{item.label}</p>
-                <p className="mt-1 text-sm font-semibold leading-5 text-[#53616b]">{item.detail}</p>
+                <p className="text-sm font-semibold text-[#111827]">{item.label}</p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-[#475569]">{item.detail}</p>
               </div>
             </div>
           );
@@ -2106,15 +2108,15 @@ function CoordinationTimelinePanel({
 
       {session && (
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-[#e5e7eb] bg-white p-4">
-            <p className="text-sm font-black text-[#15242d]">What Pulse asked</p>
+          <div className="rounded-lg border border-[#dde5ee] bg-white p-4">
+            <p className="text-sm font-semibold text-[#111827]">What Pulse asked</p>
             <div className="mt-3 grid gap-2">
               {session.facilityQuestions.map((question) => {
                 const response = session.facilityResponses.find((item) => item.questionId === question.id);
                 return (
-                  <div key={question.id} className="rounded-lg bg-[#f8fafc] px-4 py-3">
-                    <p className="text-sm font-bold leading-5 text-[#15242d]">{question.label}</p>
-                    <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#6f7b84]">
+                  <div key={question.id} className="rounded-lg bg-[#f6f8fb] px-4 py-3">
+                    <p className="text-sm font-bold leading-5 text-[#111827]">{question.label}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-normal text-[#64748b]">
                       {response?.status === "yes" ? "Confirmed" : response?.status === "no" ? "Unavailable" : response?.status === "unknown" ? "Not confirmed" : "Pending"}
                     </p>
                   </div>
@@ -2123,13 +2125,13 @@ function CoordinationTimelinePanel({
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#e5e7eb] bg-white p-4">
-            <p className="text-sm font-black text-[#15242d]">Who may help next</p>
+          <div className="rounded-lg border border-[#dde5ee] bg-white p-4">
+            <p className="text-sm font-semibold text-[#111827]">Who may help next</p>
             <div className="mt-3 grid gap-2">
               {session.contactTargets.slice(0, 4).map((target) => (
-                <div key={target.id} className="rounded-lg bg-[#f8fafc] px-4 py-3">
-                  <p className="text-sm font-bold leading-5 text-[#15242d]">{target.name}</p>
-                  <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#6f7b84]">
+                <div key={target.id} className="rounded-lg bg-[#f6f8fb] px-4 py-3">
+                  <p className="text-sm font-bold leading-5 text-[#111827]">{target.name}</p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-normal text-[#64748b]">
                     {target.status === "selected" ? "Calling first" : target.status === "queued" ? "Ready next" : target.status === "manual_required" ? "Call manually if needed" : "Not connected yet"}
                   </p>
                 </div>
@@ -2158,36 +2160,38 @@ function FirstAidInfographic({
   }));
 
   return (
-    <div className="mt-7 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-5">
+    <div className="mt-7 rounded-lg border border-[#dde5ee] bg-[#f6f8fb] p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-black text-[#d92d38]">Do this now</p>
-          <h2 className="mt-1 text-2xl font-black text-[#15242d]">{triage.situationSummary || "Stay with the person."}</h2>
+          <p className="text-sm font-semibold text-[#c81e36]">Do this now</p>
+          <h2 className="mt-1 text-2xl font-semibold text-[#111827]">{triage.situationSummary || "Stay with the person."}</h2>
         </div>
-        {guidanceImage.status === "loading" ? <Loader2 className="size-7 animate-spin text-[#35a66a]" /> : <ImageIcon className="size-7 text-[#35a66a]" />}
+        {guidanceImage.status === "loading" ? <Loader2 className="size-7 animate-spin text-[#15803d]" /> : <ImageIcon className="size-7 text-[#15803d]" />}
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+      <div className="mt-5 overflow-hidden rounded-lg border border-[#dde5ee] bg-white">
         {guidanceImage.imageDataUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={guidanceImage.imageDataUrl}
-            alt={guidanceImage.altText}
-            className="aspect-[16/10] w-full object-cover"
-          />
+          <div className="flex min-h-72 w-full items-center justify-center bg-[#f6f8fb] p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={guidanceImage.imageDataUrl}
+              alt={guidanceImage.altText}
+              className="max-h-[520px] w-full object-contain"
+            />
+          </div>
         ) : (
-          <div className="grid min-h-64 gap-3 bg-[#f0fbf4] p-4 md:grid-cols-3">
+          <div className="grid min-h-64 gap-3 bg-[#eef9f2] p-4 md:grid-cols-3">
             {enrichedSteps.map((step, index) => {
               const Icon = getActionIcon(step.title);
               return (
                 <div key={step.title} className="flex flex-col justify-between rounded-lg border border-[#d7ebdf] bg-white p-4">
-                  <span className="grid size-14 place-items-center rounded-lg bg-[#fff2f1] text-[#d92d38]">
+                  <span className="grid size-14 place-items-center rounded-lg bg-[#fff4f5] text-[#c81e36]">
                     <Icon className="size-8" />
                   </span>
                   <div>
-                    <p className="text-xs font-black uppercase tracking-normal text-[#35a66a]">Step {index + 1}</p>
-                    <h3 className="mt-2 text-xl font-black leading-6 text-[#15242d]">{step.title}</h3>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-[#53616b]">{step.detail}</p>
+                    <p className="text-xs font-semibold uppercase tracking-normal text-[#15803d]">Step {index + 1}</p>
+                    <h3 className="mt-2 text-xl font-semibold leading-6 text-[#111827]">{step.title}</h3>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-[#475569]">{step.detail}</p>
                   </div>
                 </div>
               );
@@ -2196,7 +2200,7 @@ function FirstAidInfographic({
         )}
       </div>
 
-      <p className="mt-3 text-sm font-bold leading-6 text-[#53616b]">
+      <p className="mt-3 text-sm font-bold leading-6 text-[#475569]">
         {guidanceImage.status === "loading" ? "A simple picture guide is loading. The steps below are ready now." : guidanceImage.caption || "Use these simple steps now."}
       </p>
 
@@ -2220,17 +2224,17 @@ function GuidanceList({
 }) {
   const className =
     tone === "green"
-      ? "border-[#bfe4cf] bg-[#f0fbf4] text-[#1e7b4a]"
+      ? "border-[#bbdfc8] bg-[#eef9f2] text-[#166534]"
       : tone === "warning"
-        ? "border-[#ecd8a8] bg-[#fff9ea] text-[#816116]"
-        : "border-[#f3b0b4] bg-[#fff2f1] text-[#a51d2a]";
+        ? "border-[#ead8a2] bg-[#fff8e6] text-[#76520b]"
+        : "border-[#efb4bd] bg-[#fff4f5] text-[#8f1830]";
 
   return (
     <div className={`rounded-lg border p-4 ${className}`}>
-      <p className="text-sm font-black">{title}</p>
+      <p className="text-sm font-semibold">{title}</p>
       <div className="mt-3 grid gap-2">
         {items.map((item) => (
-          <p key={item} className="rounded-lg bg-white/75 px-3 py-2 text-sm font-bold leading-5 text-[#15242d]">
+          <p key={item} className="rounded-lg bg-white/75 px-3 py-2 text-sm font-bold leading-5 text-[#111827]">
             {normalizeAction(item)}
           </p>
         ))}

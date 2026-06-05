@@ -1,0 +1,36 @@
+name: Safety review
+description: Track a safety, privacy, or emergency-domain review item.
+title: "[Safety]: "
+labels: ["safety"]
+body:
+  - type: textarea
+    id: concern
+    attributes:
+      label: Concern
+      description: Describe the safety or privacy issue.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link to files, screenshots, test output, or provider diagnostics without exposing secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Proposed Mitigation
+    validations:
+      required: false

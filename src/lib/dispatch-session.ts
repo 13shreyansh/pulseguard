@@ -26,27 +26,35 @@ export function getClientKey(request: NextRequest) {
   );
 }
 
-export function issueDispatchSession(clientKey: string) {
+export function issueDispatchSession() {
   const issuedAt = Date.now();
   const nonce = crypto.randomBytes(12).toString("base64url");
-  const payload = `${issuedAt}.${nonce}.${clientKey}`;
+  const payload = `${issuedAt}.${nonce}`;
   return `${payload}.${sign(payload)}`;
 }
 
 export function verifyDispatchSession(token: string | undefined, clientKey: string) {
   if (!token) return false;
   const parts = token.split(".");
-  if (parts.length !== 4) return false;
-  const [issuedAtRaw, nonce, tokenClientKey, signature] = parts;
-  if (!issuedAtRaw || !nonce || tokenClientKey !== clientKey || !signature) return false;
+  if (parts.length !== 3 && parts.length !== 4) return false;
+  const [issuedAtRaw, nonce] = parts;
+  const signature = parts.length === 4 ? parts[3] : parts[2];
+  if (!issuedAtRaw || !nonce || !signature) return false;
   const issuedAt = Number(issuedAtRaw);
   if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > TOKEN_TTL_MS) return false;
 
-  const payload = `${issuedAtRaw}.${nonce}.${tokenClientKey}`;
-  const expected = sign(payload);
+  const modernPayload = `${issuedAtRaw}.${nonce}`;
+  const legacyPayload = parts.length === 4 ? `${issuedAtRaw}.${nonce}.${parts[2]}` : null;
+  const expected = sign(modernPayload);
+  const legacyExpected = legacyPayload ? sign(legacyPayload) : null;
   const signatureBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
-  return signatureBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+  if (signatureBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
+    return true;
+  }
+  if (!legacyExpected || parts[2] !== clientKey) return false;
+  const legacyExpectedBuffer = Buffer.from(legacyExpected);
+  return signatureBuffer.length === legacyExpectedBuffer.length && crypto.timingSafeEqual(signatureBuffer, legacyExpectedBuffer);
 }
 
 export function checkDispatchCooldown(clientKey: string) {

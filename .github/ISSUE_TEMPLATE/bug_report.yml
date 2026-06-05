@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a defect in Pulse behavior, docs, or operations.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction Steps
+      description: Include route, viewport, browser, and any relevant environment mode.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Bystander UI
+        - Speech intake
+        - Triage/guidance
+        - Hospital search
+        - Dispatch/status
+        - Documentation
+        - Operations
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety Impact
+      description: Could this mislead a bystander, expose private information, or trigger live services unexpectedly?
+    validations:
+      required: true

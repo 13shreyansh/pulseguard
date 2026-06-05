@@ -141,3 +141,14 @@ More detail: [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md)
 ## Demo Script
 
 Use the short walkthrough in [docs/DEMO.md](docs/DEMO.md) for screenshots, video capture, or live presentation.
+
+## Repository Evidence
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Safety and evaluation](docs/SAFETY_AND_EVALUATION.md)
+- [Testing](docs/TESTING.md)
+- [Operations](docs/OPERATIONS.md)
+- [Production readiness](docs/PRODUCTION_READINESS.md)
+- [Judge readiness](docs/JUDGE_READINESS.md)
+- [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
