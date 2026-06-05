@@ -1,6 +1,25 @@
 import { expect, type Page, test } from "playwright/test";
 
 const baseURL = process.env.PULSE_TEST_BASE_URL || "http://localhost:3000";
+const forbiddenPublicTerms = [
+  "API",
+  "Call ID",
+  "Google Places",
+  "operator phone",
+  "configured",
+  "readiness",
+  "timeline",
+  "provider",
+  "score",
+  "confidence",
+  "mock",
+  "test",
+  "demo",
+  "context only",
+  "sequential",
+  "candidate",
+  "coordination",
+];
 
 const triage = {
   title: "Major trauma detected",
@@ -61,7 +80,7 @@ function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "call
         name: hospitals[0].name,
         phone: hospitals[0].phone,
         status: "selected",
-        note: "Selected for the first sequential coordination call.",
+        note: "Selected for the first help call.",
       },
       {
         id: "local-emergency-services",
@@ -112,7 +131,7 @@ function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "call
         status: handoffStatus === "calling" ? "queued" : "ended",
         callId: "call-accepted",
         callProvider: "vapi",
-        dialedNumberLabel: "configured coordination line",
+        dialedNumberLabel: "response line",
         routing: "configured_demo_line",
       },
     ],
@@ -137,13 +156,13 @@ function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "call
       {
         id: "brief",
         label: "Details shared",
-        detail: "GPS, report, triage, and candidate list were sent to the coordination line.",
+        detail: "GPS, report, and care options were shared with the response line.",
         state: "done",
       },
       {
         id: "facility-call",
         label: handoffStatus === "accepted" ? "Help accepted the case" : "Calling for help",
-        detail: handoffStatus === "accepted" ? "The selected facility accepted the handoff." : "configured demo line",
+        detail: handoffStatus === "accepted" ? "The selected facility accepted the case." : "Response line",
         state: handoffStatus === "accepted" ? "done" : "active",
       },
     ],
@@ -209,7 +228,7 @@ async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed
         callId: "call-accepted",
         status: "ended",
         callProvider: "vapi",
-        receivingPhone: "configured coordination line",
+        receivingPhone: "response line",
         callTarget: "coordination_session",
         selectedHospitalPhone: hospitals[0].phone,
         selectedDestination: hospitals[0],
@@ -221,7 +240,7 @@ async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed
   });
 }
 
-test("mobile panic flow shows guidance before dispatch and accepted coordination evidence", async ({ page }) => {
+test("mobile panic flow shows guidance before dispatch and accepted help evidence", async ({ page }) => {
   await mockIntake(page, "accepted");
 
   await page.goto("/");
@@ -239,11 +258,16 @@ test("mobile panic flow shows guidance before dispatch and accepted coordination
   await expect(page.getByText("Pulse cleaned up the wording from your voice.")).toBeVisible();
   await page.getByRole("button", { name: "Looks right" }).click();
 
-  await expect(page.getByRole("heading", { name: "Help has accepted the case." })).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole("heading", { name: "Help is ready to receive them." })).toBeVisible({ timeout: 20000 });
   await expect(await page.getByText("City Trauma Centre", { exact: true }).count()).toBeGreaterThan(0);
   await expect(page.getByText("What Pulse asked")).toBeVisible();
   await expect(await page.getByText("Confirmed", { exact: true }).count()).toBeGreaterThan(0);
   await expect(page.getByAltText(triage.situationSummary)).toBeVisible();
+
+  const finalText = await page.locator("body").innerText();
+  for (const term of forbiddenPublicTerms) {
+    expect(finalText, `public flow should not contain ${term}`).not.toContain(term);
+  }
 });
 
 test("mobile panic flow does not overstate an unconfirmed handoff", async ({ page }) => {
@@ -258,6 +282,11 @@ test("mobile panic flow does not overstate an unconfirmed handoff", async ({ pag
   await page.getByRole("button", { name: "Looks right" }).click();
 
   await expect(page.getByRole("heading", { name: "Help was not confirmed." })).toBeVisible({ timeout: 20000 });
-  await expect(page.getByText("Call local emergency services now")).toBeVisible();
+  await expect(page.getByText("Call local emergency services now").first()).toBeVisible();
   await expect(await page.getByText("Not confirmed", { exact: true }).count()).toBeGreaterThan(0);
+
+  const finalText = await page.locator("body").innerText();
+  for (const term of forbiddenPublicTerms) {
+    expect(finalText, `unconfirmed flow should not contain ${term}`).not.toContain(term);
+  }
 });

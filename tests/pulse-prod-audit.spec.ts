@@ -16,6 +16,9 @@ const forbiddenPublicTerms = [
   "test",
   "demo",
   "context only",
+  "sequential",
+  "candidate",
+  "coordination",
 ];
 
 test.use({
@@ -54,22 +57,26 @@ test("production bystander flow reaches dispatch result", async ({ page }, testI
   }
 
   await page.getByRole("button", { name: /Start Emergency Help/i }).click();
-  await expect(page.getByLabel("What Pulse heard")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByLabel("I heard this")).toBeVisible({ timeout: 20000 });
 
   const listenText = await page.locator("body").innerText();
-  expect(listenText).toContain("Tell us what happened.");
+  expect(listenText).toContain("What happened?");
   expect(listenText).toMatch(/Location shared|Getting location/);
 
-  await page.getByLabel("What Pulse heard").fill(
-    "Controlled Pulse production verification. No real patient. A person fell near the roadside, is awake and breathing, may have leg pain, and there is no visible heavy bleeding.",
+  await page.getByLabel("I heard this").fill(
+    "Controlled Pulse verification. No real person needs help. A person in this practice scenario fell near the roadside, is awake and breathing, may have leg pain, and there is no visible heavy bleeding.",
   );
-  await page.getByRole("button", { name: /Send Emergency Brief/i }).click();
+  await page.getByRole("button", { name: /Check what I heard/i }).click();
+  await expect(page.getByRole("heading", { name: "This is what I heard." })).toBeVisible({
+    timeout: 20000,
+  });
+  await page.getByRole("button", { name: "Looks right" }).click();
 
-  await expect(page.getByRole("heading", { name: /Sending emergency brief|Help has been notified|We could not complete the call/i })).toBeVisible({
+  await expect(page.getByRole("heading", { name: /Stay with them|Help is ready|Pulse could not confirm help|Help was not confirmed/i })).toBeVisible({
     timeout: 20000,
   });
 
-  await expect(page.getByRole("heading", { name: /Help has been notified|We could not complete the call/i })).toBeVisible({
+  await expect(page.getByRole("heading", { name: /Help is ready|Pulse could not confirm help|Help was not confirmed/i })).toBeVisible({
     timeout: 90000,
   });
 
@@ -83,6 +90,9 @@ test("production bystander flow reaches dispatch result", async ({ page }, testI
     body: finalText,
     contentType: "text/plain",
   });
+  for (const term of forbiddenPublicTerms) {
+    expect(finalText, `public final UI should not contain ${term}`).not.toContain(term);
+  }
 
   const dispatchCall = apiResults.find((item) => item.url.endsWith("/api/dispatch/call"));
   expect(dispatchCall?.status, "dispatch call endpoint should return a response").toBeDefined();

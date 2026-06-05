@@ -288,9 +288,9 @@ function buildContactTargets(body: DispatchRequest, coordinationPhone: string | 
       status: index === 0 ? "selected" : "queued",
       note: index === 0
         ? coordinationPhone
-          ? "Selected for the first sequential coordination call."
-          : "Selected, but no configured coordination line is available."
-        : "Queued as fallback if the first handoff is not confirmed.",
+          ? "Selected for the first help call."
+          : "Selected, but a response line is not available yet."
+        : "Ready as a backup option if the first call is not confirmed.",
     }));
 
   return [
@@ -300,7 +300,7 @@ function buildContactTargets(body: DispatchRequest, coordinationPhone: string | 
       type: "emergency_services",
       name: "Local emergency services",
       status: "manual_required",
-      note: "Pulse shows this as a bystander action until a verified SOS/EMS integration is configured.",
+      note: "Pulse keeps this visible as the immediate fallback action.",
     },
     {
       id: "family-contact",
@@ -353,23 +353,23 @@ function timelineForSession(input: {
     },
     {
       id: "destination",
-      label: "Emergency care candidate selected",
-      detail: input.body.hospital?.name || "Nearest available candidate selected from search.",
+      label: "Nearby emergency care selected",
+      detail: input.body.hospital?.name || "Nearest suitable emergency care selected from live search.",
       state: "done",
     },
     {
       id: "brief",
       label: "Incident brief shared",
       detail: input.message.status === "sent"
-        ? "GPS, report, triage, and candidate list were sent to the coordination line."
-        : "The incident brief still needs a configured message channel.",
+        ? "GPS, report, and care options were shared with the response line."
+        : "Pulse could not share the incident brief yet.",
       state: input.message.status === "sent" ? "done" : "attention",
     },
     {
       id: "facility-call",
-      label: "Sequential coordination call",
+      label: "Calling nearby help",
       detail: input.callAttempt
-        ? `${input.callAttempt.targetName}: ${input.callAttempt.routing === "direct_hospital_phone" ? "direct hospital phone" : "configured demo line"}`
+        ? `${input.callAttempt.targetName}: ${input.callAttempt.routing === "direct_hospital_phone" ? "direct hospital desk" : "response line"}`
         : "Waiting for call setup.",
       state: callState,
     },
@@ -405,10 +405,10 @@ function buildCoordinationSession(input: {
       : [{
           id: "attempt-1",
           targetId: selectedTargetId,
-          targetName: input.body.hospital?.name || "Selected emergency care candidate",
+          targetName: input.body.hospital?.name || "Selected emergency care",
           targetType: "hospital_candidate",
           status: "prepared",
-          dialedNumberLabel: input.coordinationPhone ? "configured coordination line" : "not configured",
+          dialedNumberLabel: input.coordinationPhone ? "response line" : "not available",
           routing: inferRoutingForTarget(input.body, input.coordinationPhone),
         }],
     bystanderGuidance: {
@@ -931,7 +931,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       callId: `local-${Date.now()}`,
       status: "ended",
-      receivingPhone: operatorPhone ? "configured coordination line" : "not configured locally",
+      receivingPhone: operatorPhone ? "response line" : "not available locally",
       callTarget: "coordination_session",
       selectedHospitalPhone: body.hospital?.phone,
       verificationOnly: true,
@@ -953,14 +953,14 @@ export async function POST(request: NextRequest) {
   if (callProvider === "twilio" && requiresInteractiveCall()) {
     return NextResponse.json(
       {
-        error: "Interactive coordination requires Vapi. Twilio Voice alone can only place a one-way alert call.",
+        error: "Pulse needs an interactive call setup before it can place live help calls.",
       },
       { status: 500 },
     );
   }
 
   if (!operatorPhone || (callProvider === "vapi" && (!apiKey || !phoneNumberId))) {
-    return NextResponse.json({ error: "Coordination call is not configured" }, { status: 500 });
+    return NextResponse.json({ error: "Pulse could not start the help call." }, { status: 500 });
   }
 
   if (operatorMessage.status !== "sent") {
@@ -968,8 +968,8 @@ export async function POST(request: NextRequest) {
 	      {
 	        error:
 	          operatorMessage.status === "not_configured"
-	            ? "Coordination message dispatch is not configured"
-	            : "Coordination message dispatch failed",
+	            ? "Pulse could not share the incident brief yet."
+	            : "Pulse could not send the incident brief.",
 	        operatorMessage,
 	      },
       { status: 500 },
@@ -998,7 +998,7 @@ export async function POST(request: NextRequest) {
         status: "failed",
         callId: operatorCall.callId,
         callProvider: operatorCall.provider,
-        dialedNumberLabel: "configured coordination line",
+        dialedNumberLabel: "response line",
         routing: inferRoutingForTarget(body, operatorPhone),
       },
       facilityResponseStatus: "unknown",
@@ -1007,7 +1007,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        error: "Coordination call failed",
+        error: "Pulse could not complete the help call.",
         details: operatorCall.error,
         diagnosticCode: operatorCall.diagnosticCode,
         coordinationSession,
@@ -1025,7 +1025,7 @@ export async function POST(request: NextRequest) {
     status: operatorCall.status,
     callId: operatorCall.callId,
     callProvider: operatorCall.provider,
-    dialedNumberLabel: "configured coordination line",
+    dialedNumberLabel: "response line",
     routing: inferRoutingForTarget(body, operatorPhone),
   };
   const coordinationSession = buildCoordinationSession({

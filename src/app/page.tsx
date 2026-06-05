@@ -395,8 +395,8 @@ function getHelpStatus(dispatchCall: DispatchCall, sendPhase: SendPhase) {
 
   if (handoffStatus === "accepted") {
     return {
-      title: "Help has accepted the case.",
-      detail: "Pulse has evidence that the selected care team can receive the person. Keep following the steps until responders or transport arrive.",
+      title: "Help is ready to receive them.",
+      detail: "Pulse heard a clear yes from the care team. Keep following the steps until responders or transport arrive.",
       tone: "success" as const,
     };
   }
@@ -424,39 +424,86 @@ function getHelpStatus(dispatchCall: DispatchCall, sendPhase: SendPhase) {
   };
 }
 
+const INTERNAL_PROGRESS_TEXT = /\b(api|candidate|configured|confidence|coordination|demo|google places|operator|provider|readiness|score|sequential|timeline|triage)\b|\bgps\b/i;
+
+function sanitizeProgressText(value: string, fallback: string) {
+  return INTERNAL_PROGRESS_TEXT.test(value) ? fallback : value;
+}
+
+function publicProgressItem(item: CoordinationTimelineItem, handoffStatus?: CoordinationHandoffStatus, sendPhase?: SendPhase, error?: string): CoordinationTimelineItem {
+  if (item.id === "guidance") {
+    return {
+      ...item,
+      label: "Steps shown",
+      detail: "Keep following the safety steps on this screen.",
+    };
+  }
+
+  if (item.id === "destination") {
+    return {
+      ...item,
+      label: "Nearby care found",
+      detail: sanitizeProgressText(item.detail, "Pulse found nearby emergency care."),
+    };
+  }
+
+  if (item.id === "brief") {
+    return {
+      ...item,
+      label: "Details shared",
+      detail: "Your location and report were shared.",
+    };
+  }
+
+  if (item.id !== "facility-call") {
+    return {
+      ...item,
+      label: sanitizeProgressText(item.label, "Progress updated"),
+      detail: sanitizeProgressText(item.detail, "Pulse updated the help request."),
+    };
+  }
+
+  if (handoffStatus === "accepted") {
+    return {
+      ...item,
+      label: "Help is ready",
+      detail: "The care team said they can receive the person.",
+      state: "done",
+    };
+  }
+
+  if (handoffStatus === "not_confirmed") {
+    return {
+      ...item,
+      label: "Help not confirmed",
+      detail: "The call ended without a clear yes. Call local emergency services now.",
+      state: "attention",
+    };
+  }
+
+  if (handoffStatus === "failed" || sendPhase === "failed") {
+    return {
+      ...item,
+      label: "Call did not complete",
+      detail: error || "Pulse could not complete the call. Call local emergency services now.",
+      state: "attention",
+    };
+  }
+
+  return {
+    ...item,
+    label: "Calling for help",
+    detail: "Pulse is asking whether they can receive the person.",
+  };
+}
+
 function getCoordinationTimeline(dispatchCall: DispatchCall, sendPhase: SendPhase): CoordinationTimelineItem[] {
   const session = dispatchCall.coordinationSession;
   const handoffStatus = dispatchCall.handoffStatus || session?.handoffStatus;
   const sessionTimeline = session?.timeline || [];
 
   if (sessionTimeline.length > 0) {
-    return sessionTimeline.map((item) => {
-      if (item.id !== "facility-call") return item;
-      if (handoffStatus === "accepted") {
-        return {
-          ...item,
-          label: "Help accepted the case",
-          detail: "The call evidence indicates the selected care team accepted the case.",
-          state: "done",
-        };
-      }
-      if (handoffStatus === "not_confirmed") {
-        return {
-          ...item,
-          label: "Help not confirmed",
-          detail: "The call ended without a clear yes. Use local emergency services now.",
-          state: "attention",
-        };
-      }
-      if (handoffStatus === "failed" || sendPhase === "failed") {
-        return {
-          ...item,
-          detail: dispatchCall.error || "The call did not complete.",
-          state: "attention",
-        };
-      }
-      return item;
-    });
+    return sessionTimeline.map((item) => publicProgressItem(item, handoffStatus, sendPhase, dispatchCall.error));
   }
 
   const messageStatus = dispatchCall.operatorMessage?.status;
@@ -490,14 +537,14 @@ function getCoordinationTimeline(dispatchCall: DispatchCall, sendPhase: SendPhas
     },
     {
       id: "facility-call",
-      label: accepted ? "Help accepted the case" : notConfirmed ? "Help not confirmed" : "Calling for help",
-      title: accepted ? "Help accepted the case" : notConfirmed ? "Help not confirmed" : "Calling for help",
+      label: accepted ? "Help is ready" : notConfirmed ? "Help not confirmed" : "Calling for help",
+      title: accepted ? "Help is ready" : notConfirmed ? "Help not confirmed" : "Calling for help",
       detail: accepted
-        ? "The selected care team accepted the case."
+        ? "The care team said they can receive the person."
         : notConfirmed
           ? "The call ended without a clear yes."
         : callActive
-          ? "Call is in progress."
+          ? "Pulse is asking if they can receive the person."
           : failed
             ? "Call did not complete."
             : "Call is starting.",
@@ -1758,7 +1805,7 @@ function HelpNotifiedScreen({
   return (
     <div className="grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <section className="rounded-[2rem] border border-[#e5ddd2] bg-white p-5 shadow-2xl shadow-[#ccbca8]/20 sm:p-7">
-        <StatusBadge tone={isFailure ? "danger" : "green"} icon={isFailure ? AlertTriangle : CheckCircle2} label={isFailure ? "Needs attention" : "Shared"} />
+        <StatusBadge tone={isFailure ? "danger" : "green"} icon={isFailure ? AlertTriangle : CheckCircle2} label={isFailure ? "Needs attention" : "Help contacted"} />
         <h1 className="mt-5 text-4xl font-black tracking-normal text-[#15242d] sm:text-5xl">
           {helpStatus.title}
         </h1>
@@ -1978,7 +2025,7 @@ function CoordinationTimelinePanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-black text-[#d92d38]">Help progress</p>
-          <h2 className="mt-1 text-2xl font-black text-[#15242d]">What Pulse is doing.</h2>
+          <h2 className="mt-1 text-2xl font-black text-[#15242d]">Where things stand.</h2>
         </div>
         <Radio className="size-7 text-[#35a66a]" />
       </div>
@@ -2029,7 +2076,7 @@ function CoordinationTimelinePanel({
           </div>
 
           <div className="rounded-3xl border border-[#e5ddd2] bg-white p-4">
-            <p className="text-sm font-black text-[#15242d]">Who Pulse can call</p>
+            <p className="text-sm font-black text-[#15242d]">Who may help next</p>
             <div className="mt-3 grid gap-2">
               {session.contactTargets.slice(0, 4).map((target) => (
                 <div key={target.id} className="rounded-2xl bg-[#f7f3ec] px-4 py-3">

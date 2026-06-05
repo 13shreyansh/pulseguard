@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Pulse",
-  description: "Autonomous emergency dispatch for the first critical minute.",
+  title: "Pulse Emergency",
+  description: "Bystander-first emergency guidance and live help outreach for the first critical minute.",
 };
 
 export default function RootLayout({
