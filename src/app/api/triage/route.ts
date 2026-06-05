@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 type TriageResult = {
   title: string;
@@ -35,7 +36,7 @@ const fallbackTriage: TriageResult = {
     "Keep him still and awake",
     "Watch breathing",
   ],
-  situationSummary: "The person may have a serious injury and should stay still while help is called.",
+  situationSummary: "The person may have a serious injury and should stay still while Pulse contacts help.",
   doNow: [
     "Keep the person still",
     "Press firmly on bleeding if you see blood",
@@ -65,6 +66,19 @@ function fallbackResponse(reason: string) {
     source: "local_fallback",
     warning: reason,
   });
+}
+
+function cleanUserFacingText(value: string, fallback: string) {
+  const cleaned = value.trim();
+  return cleaned || fallback;
+}
+
+function cleanUserFacingList(values: string[], fallback: string[]) {
+  const cleaned = values
+    .map((value) => cleanUserFacingText(value, ""))
+    .filter(Boolean);
+
+  return cleaned.length > 0 ? cleaned.slice(0, 4) : fallback;
 }
 
 function normalizeTriage(value: Partial<TriageResult>): TriageResult {
@@ -99,40 +113,47 @@ function normalizeTriage(value: Partial<TriageResult>): TriageResult {
     OBSTETRIC_EMERGENCY: "Maternity emergency care required",
     UNKNOWN: "Emergency department required",
   };
-  const actions = Array.isArray(value.actions) && value.actions.length > 0
+  const rawActions = Array.isArray(value.actions) && value.actions.length > 0
     ? value.actions.slice(0, 4)
     : fallbackTriage.actions;
-  const doNow = Array.isArray(value.doNow) && value.doNow.length > 0
+  const rawDoNow = Array.isArray(value.doNow) && value.doNow.length > 0
     ? value.doNow.slice(0, 4)
-    : actions;
-  const doNotDo = Array.isArray(value.doNotDo) && value.doNotDo.length > 0
+    : rawActions;
+  const rawDoNotDo = Array.isArray(value.doNotDo) && value.doNotDo.length > 0
     ? value.doNotDo.slice(0, 4)
     : fallbackTriage.doNotDo;
-  const watchFor = Array.isArray(value.watchFor) && value.watchFor.length > 0
+  const rawWatchFor = Array.isArray(value.watchFor) && value.watchFor.length > 0
     ? value.watchFor.slice(0, 4)
     : fallbackTriage.watchFor;
+  const actions = cleanUserFacingList(rawActions, fallbackTriage.actions);
+  const doNow = cleanUserFacingList(rawDoNow, actions);
+  const doNotDo = cleanUserFacingList(rawDoNotDo, fallbackTriage.doNotDo);
+  const watchFor = cleanUserFacingList(rawWatchFor, fallbackTriage.watchFor);
 
   return {
-    title: titleByType[emergencyType] || value.title || fallbackTriage.title,
+    title: cleanUserFacingText(titleByType[emergencyType] || value.title || fallbackTriage.title, fallbackTriage.title),
     emergencyType,
     severity: value.severity && allowedSeverities.has(value.severity) ? value.severity : fallbackTriage.severity,
     hospitalType: hospitalByType[emergencyType] || value.hospitalType || fallbackTriage.hospitalType,
     signals: Array.isArray(value.signals) && value.signals.length > 0
       ? value.signals.slice(0, 5)
       : fallbackTriage.signals,
-    warning: value.warning || fallbackTriage.warning,
+    warning: cleanUserFacingText(value.warning || fallbackTriage.warning, fallbackTriage.warning),
     actions,
-    situationSummary: value.situationSummary || fallbackTriage.situationSummary,
+    situationSummary: cleanUserFacingText(value.situationSummary || fallbackTriage.situationSummary, fallbackTriage.situationSummary),
     doNow,
     doNotDo,
     watchFor,
-    infographicBrief: value.infographicBrief || fallbackTriage.infographicBrief,
+    infographicBrief: cleanUserFacingText(value.infographicBrief || fallbackTriage.infographicBrief, fallbackTriage.infographicBrief),
     dispatchBrief: value.dispatchBrief || fallbackTriage.dispatchBrief,
     source: "openai",
   };
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimit(request, { name: "triage", limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
+
   const { transcript } = (await request.json()) as { transcript?: string };
   const cleanedTranscript = transcript?.trim();
 
@@ -192,8 +213,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    return fallbackResponse(`AI triage is unavailable; using conservative guidance. ${errorText.slice(0, 160)}`);
+    return fallbackResponse("AI triage is unavailable; using conservative guidance.");
   }
 
   const data = (await response.json()) as {

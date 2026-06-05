@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:mocked": "playwright test tests/pulse-coordination-ui.spec.ts tests/handoff-inference.spec.ts",
+    "test:mocked": "playwright test tests/pulse-coordination-ui.spec.ts tests/handoff-inference.spec.ts tests/dispatch-session.spec.ts",
     "test:prod-audit": "playwright test tests/pulse-prod-audit.spec.ts"
   },
   "dependencies": {

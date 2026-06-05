@@ -101,13 +101,10 @@ type CoordinationTimelineItem = {
 };
 
 type DispatchCall = {
-  callId?: string;
+  statusToken?: string;
   status: "idle" | "starting" | "queued" | "ringing" | "in-progress" | "ended" | "failed";
   attempt?: number;
   verificationOnly?: boolean;
-  receivingPhone?: string;
-  callTarget?: "operator_relay" | "coordination_session";
-  selectedHospitalPhone?: string;
   selectedDestination?: HospitalCandidate;
   hospitalName?: string;
   hospitalIndex?: number;
@@ -122,7 +119,7 @@ type DispatchCall = {
   error?: string;
   operatorMessage?: {
     status: "sent" | "not_configured" | "failed";
-    provider: "twilio" | "webhook" | "none";
+    provider?: "twilio" | "webhook" | "none";
     id?: string;
     code?: string;
     error?: string;
@@ -748,7 +745,7 @@ export default function Home() {
       setStep("done");
       setDispatchCall({
         status: "failed",
-        error: error instanceof Error ? error.message : "We could not complete the call. Try again or call local emergency services now.",
+        error: error instanceof Error ? error.message : "We could not complete the call. Keep following the safety steps and try again.",
       });
     }
   }
@@ -832,8 +829,12 @@ export default function Home() {
     }
   }
 
-  async function createDispatchSessionToken() {
-    const response = await fetch("/api/dispatch/session", { method: "POST" });
+  async function createDispatchSessionToken(reportForToken: string) {
+    const response = await fetch("/api/dispatch/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report: reportForToken }),
+    });
     const data = (await response.json().catch(() => null)) as { token?: string } | null;
     if (!response.ok || !data?.token) {
       throw new Error("Pulse could not prepare a secure help request. Try again.");
@@ -864,7 +865,7 @@ export default function Home() {
     });
 
     try {
-      const dispatchSessionToken = await createDispatchSessionToken();
+      const dispatchSessionToken = await createDispatchSessionToken(transcript);
       const response = await fetch("/api/dispatch/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -888,12 +889,9 @@ export default function Home() {
       }
 
 	      const data = (await response.json()) as {
-	        callId?: string;
+	        statusToken?: string;
 	        status?: DispatchCall["status"];
 	        verificationOnly?: boolean;
-	        receivingPhone?: string;
-	        callTarget?: DispatchCall["callTarget"];
-	        selectedHospitalPhone?: string;
 	        selectedDestination?: HospitalCandidate;
 	        handoffStatus?: CoordinationHandoffStatus;
 	        coordinationSession?: CoordinationSession;
@@ -905,15 +903,12 @@ export default function Home() {
 	      const nextHandoffStatus = data.handoffStatus || data.coordinationSession?.handoffStatus;
 	      setSendPhase(nextStatus === "failed" || nextHandoffStatus === "failed" ? "failed" : nextStatus === "ended" ? "done" : "calling_help");
 	      setDispatchCall({
-	        callId: data.callId,
+	        statusToken: data.statusToken,
 	        attempt,
 	        verificationOnly: data.verificationOnly,
 	        hospitalName: hospital.name,
 	        hospitalIndex,
 	        messageAlreadySent: options.messageAlreadySent,
-	        receivingPhone: data.receivingPhone,
-	        callTarget: data.callTarget,
-	        selectedHospitalPhone: data.selectedHospitalPhone,
 	        selectedDestination: data.selectedDestination || data.coordinationSession?.selectedDestination,
 	        handoffStatus: nextHandoffStatus,
 	        coordinationSession: data.coordinationSession,
@@ -933,7 +928,7 @@ export default function Home() {
         hospitalName: hospital.name,
         hospitalIndex,
         messageAlreadySent: options.messageAlreadySent,
-        error: error instanceof Error ? error.message : "We could not complete the call. Try again or call local emergency services now.",
+        error: error instanceof Error ? error.message : "We could not complete the call. Call local emergency services now.",
       });
       setSendPhase("failed");
       setStep("done");
@@ -941,13 +936,14 @@ export default function Home() {
   }, [hospitals]);
 
   useEffect(() => {
-    if (dispatchCall.verificationOnly || !dispatchCall.callId || dispatchCall.status === "ended" || dispatchCall.status === "failed") {
+    if (dispatchCall.verificationOnly || !dispatchCall.statusToken || dispatchCall.status === "ended" || dispatchCall.status === "failed") {
       return;
     }
 
+    const statusToken = dispatchCall.statusToken;
     const timer = window.setInterval(async () => {
       try {
-        const response = await fetch(`/api/dispatch/status?callId=${dispatchCall.callId}`);
+        const response = await fetch(`/api/dispatch/status?statusToken=${encodeURIComponent(statusToken)}`);
         if (!response.ok) return;
 	        const data = (await response.json()) as {
 	          status?: DispatchCall["status"];
@@ -980,8 +976,8 @@ export default function Home() {
 	          const nextHospitalIndex = Math.min(hospitalIndex + 1, Math.max(context.hospitals.length - 1, 0));
 	          const hospital = context.hospitals[nextHospitalIndex] ?? context.hospitals[hospitalIndex] ?? context.hospitals[0];
 	          if (
-	            dispatchCall.callId &&
-	            retryingCallIdRef.current !== dispatchCall.callId &&
+	            dispatchCall.statusToken &&
+	            retryingCallIdRef.current !== dispatchCall.statusToken &&
 	            (data.retryable || isRetryableCallFailure(dispatchCall.diagnosticCode || dispatchCall.endedReason)) &&
             currentAttempt < MAX_DISPATCH_CALL_ATTEMPTS &&
             context.submittedReport &&
@@ -989,7 +985,7 @@ export default function Home() {
             context.incidentLocation &&
             hospital
           ) {
-            retryingCallIdRef.current = dispatchCall.callId;
+            retryingCallIdRef.current = dispatchCall.statusToken;
             setSendPhase("calling_help");
             await startDispatchCall(
               context.submittedReport,
@@ -1016,7 +1012,7 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [
     dispatchCall.attempt,
-    dispatchCall.callId,
+    dispatchCall.statusToken,
     dispatchCall.diagnosticCode,
     dispatchCall.endedReason,
     dispatchCall.hospitalIndex,
@@ -1474,7 +1470,7 @@ function StartScreen({
             </button>
 
             <p className="mt-6 max-w-xl text-sm font-bold leading-6 text-[#475569]">
-              If there is immediate danger, call local emergency services now too.
+              Pulse will contact help after your report. First, make sure you are safe.
             </p>
           </div>
 
@@ -1630,7 +1626,7 @@ function ListeningScreen({
         {microphoneFallback && locked && (
           <div className="mt-6 rounded-lg border border-[#ead8a2] bg-[#fff8e6] p-4">
             <p className="text-sm font-bold leading-6 text-[#705616]">
-              You can type what happened. Pulse can still share your location and call for help.
+              You can type what happened. Pulse can still share your location and contact help.
             </p>
           </div>
         )}
@@ -1681,7 +1677,7 @@ function ListeningScreen({
         </div>
         <div className="rounded-lg border border-[#d8e3f1] bg-white p-5 shadow-sm">
           <p className="text-lg font-semibold text-[#111827]">Stay with them. Keep them still.</p>
-          <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">If they stop breathing normally, call local emergency services now.</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-[#475569]">If their breathing changes, say what changed and follow the steps on screen.</p>
         </div>
       </aside>
     </div>
@@ -2132,7 +2128,7 @@ function CoordinationTimelinePanel({
                 <div key={target.id} className="rounded-lg bg-[#f6f8fb] px-4 py-3">
                   <p className="text-sm font-bold leading-5 text-[#111827]">{target.name}</p>
                   <p className="mt-1 text-xs font-semibold uppercase tracking-normal text-[#64748b]">
-                    {target.status === "selected" ? "Calling first" : target.status === "queued" ? "Ready next" : target.status === "manual_required" ? "Call manually if needed" : "Not connected yet"}
+                    {target.status === "selected" ? "Calling first" : target.status === "queued" ? "Ready next" : target.status === "manual_required" ? "Backup path" : "Not connected yet"}
                   </p>
                 </div>
               ))}

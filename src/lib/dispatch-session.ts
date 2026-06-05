@@ -2,20 +2,37 @@ import crypto from "crypto";
 import { NextRequest } from "next/server";
 
 const TOKEN_TTL_MS = 10 * 60 * 1000;
+const STATUS_TOKEN_TTL_MS = 30 * 60 * 1000;
 const COOLDOWN_MS = 45 * 1000;
 const recentDispatches = new Map<string, number>();
 
 function secretMaterial() {
-  return (
-    process.env.PULSE_DISPATCH_SESSION_SECRET ||
-    process.env.PULSE_OPS_TOKEN ||
-    process.env.OPENAI_API_KEY ||
-    "pulse-local-development-secret"
-  );
+  const secret = process.env.PULSE_DISPATCH_SESSION_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") return null;
+  return "pulse-local-development-secret";
 }
 
 function sign(payload: string) {
-  return crypto.createHmac("sha256", secretMaterial()).update(payload).digest("base64url");
+  const secret = secretMaterial();
+  if (!secret) return null;
+  return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+function secretKey() {
+  const secret = secretMaterial();
+  if (!secret) return null;
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+function hashValue(value: string) {
+  return crypto.createHash("sha256").update(value.trim().replace(/\s+/g, " ").toLowerCase()).digest("base64url");
+}
+
+function timingEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 export function getClientKey(request: NextRequest) {
@@ -26,35 +43,77 @@ export function getClientKey(request: NextRequest) {
   );
 }
 
-export function issueDispatchSession() {
-  const issuedAt = Date.now();
-  const nonce = crypto.randomBytes(12).toString("base64url");
-  const payload = `${issuedAt}.${nonce}`;
-  return `${payload}.${sign(payload)}`;
+export function dispatchSecretReady() {
+  return Boolean(secretMaterial());
 }
 
-export function verifyDispatchSession(token: string | undefined, clientKey: string) {
+export function issueDispatchSession(input: { clientKey: string; report: string }) {
+  const signatureClient = hashValue(input.clientKey);
+  const reportHash = hashValue(input.report);
+  const issuedAt = Date.now();
+  const nonce = crypto.randomBytes(12).toString("base64url");
+  const payload = `${issuedAt}.${nonce}.${signatureClient}.${reportHash}`;
+  const signature = sign(payload);
+  if (!signature) return null;
+  return `${payload}.${signature}`;
+}
+
+export function verifyDispatchSession(token: string | undefined, clientKey: string, report: string) {
   if (!token) return false;
   const parts = token.split(".");
-  if (parts.length !== 3 && parts.length !== 4) return false;
-  const [issuedAtRaw, nonce] = parts;
-  const signature = parts.length === 4 ? parts[3] : parts[2];
-  if (!issuedAtRaw || !nonce || !signature) return false;
+  if (parts.length !== 5) return false;
+  const [issuedAtRaw, nonce, tokenClientHash, tokenReportHash, signature] = parts;
+  if (!issuedAtRaw || !nonce || !tokenClientHash || !tokenReportHash || !signature) return false;
   const issuedAt = Number(issuedAtRaw);
   if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > TOKEN_TTL_MS) return false;
 
-  const modernPayload = `${issuedAtRaw}.${nonce}`;
-  const legacyPayload = parts.length === 4 ? `${issuedAtRaw}.${nonce}.${parts[2]}` : null;
-  const expected = sign(modernPayload);
-  const legacyExpected = legacyPayload ? sign(legacyPayload) : null;
-  const signatureBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  if (signatureBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
-    return true;
+  if (!timingEqual(tokenClientHash, hashValue(clientKey))) return false;
+  if (!timingEqual(tokenReportHash, hashValue(report))) return false;
+
+  const payload = `${issuedAtRaw}.${nonce}.${tokenClientHash}.${tokenReportHash}`;
+  const expected = sign(payload);
+  return Boolean(expected && timingEqual(signature, expected));
+}
+
+export function issueStatusToken(input: { callId: string; clientKey: string }) {
+  const key = secretKey();
+  if (!key) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const payload = JSON.stringify({
+    callId: input.callId,
+    clientHash: hashValue(input.clientKey),
+    issuedAt: Date.now(),
+    nonce: crypto.randomBytes(12).toString("base64url"),
+  });
+  const encrypted = Buffer.concat([cipher.update(payload, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString("base64url"), tag.toString("base64url"), encrypted.toString("base64url")].join(".");
+}
+
+export function verifyStatusToken(token: string | undefined, clientKey: string) {
+  if (!token) return null;
+  const key = secretKey();
+  if (!key) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+
+  try {
+    const [ivRaw, tagRaw, encryptedRaw] = parts;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivRaw, "base64url"));
+    decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encryptedRaw, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+    const payload = JSON.parse(decrypted) as { callId?: string; clientHash?: string; issuedAt?: number };
+    if (!payload.callId || !payload.clientHash || !payload.issuedAt) return null;
+    if (Date.now() - payload.issuedAt > STATUS_TOKEN_TTL_MS) return null;
+    if (!timingEqual(payload.clientHash, hashValue(clientKey))) return null;
+    return payload.callId;
+  } catch {
+    return null;
   }
-  if (!legacyExpected || parts[2] !== clientKey) return false;
-  const legacyExpectedBuffer = Buffer.from(legacyExpected);
-  return signatureBuffer.length === legacyExpectedBuffer.length && crypto.timingSafeEqual(signatureBuffer, legacyExpectedBuffer);
 }
 
 export function checkDispatchCooldown(clientKey: string) {

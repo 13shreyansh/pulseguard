@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 function fallbackText(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimit(request, { name: "speech-finalize", limit: 8, windowMs: 5 * 60_000 });
+  if (limited) return limited;
+
   const apiKey = process.env.OPENAI_API_KEY;
   const formData = await request.formData();
   const fallback = fallbackText(formData.get("fallbackText"));

@@ -6,7 +6,7 @@ Pulse is designed for a high-stress bystander context. The system favors calm la
 
 - Require GPS before intake begins.
 - Require final transcript review before message or call actions.
-- Require a short-lived browser dispatch token and cooldown before public call actions.
+- Require a short-lived browser dispatch token, reviewed-report binding, and cooldown before public call actions.
 - Show immediate actions before help-contact work completes.
 - Keep "call local emergency services" visible when the person is in immediate danger or help is not confirmed.
 - Do not ask the bystander to move a potentially injured person unless the area is unsafe.
@@ -36,7 +36,7 @@ The safety lab seed includes trauma, bleeding, breathing risk, head injury, card
 
 - The first screen is understandable without technical context.
 - Transcript confirmation appears before dispatch starts.
-- Public status responses use normalized state and evidence labels, not raw call transcript text.
+- Public status responses use encrypted status tokens, normalized state, and evidence labels, not raw call IDs or call transcript text.
 - The final screen clearly distinguishes accepted, not confirmed, and failed.
 - Public UI does not show service names, call IDs, internal readiness labels, or implementation jargon.
 - Failure states tell the bystander what to do next.

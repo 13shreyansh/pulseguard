@@ -177,13 +177,14 @@ Pulse is built for a high-stress emergency domain, so the repository prioritizes
 
 - GPS is requested before intake begins.
 - Transcript review is required before message or call actions.
-- Public dispatch requires a short-lived session token.
-- Public dispatch has a browser/IP cooldown.
-- Public status responses are normalized and redacted.
+- Public dispatch requires a short-lived session token bound to the client and reviewed report.
+- Public dispatch has a browser/IP cooldown and route-level rate limits.
+- Public status responses are normalized and redacted behind encrypted status tokens.
 - Public UI avoids internal service names, call IDs, readiness labels, and implementation jargon.
 - Unconfirmed handoff states do not render as accepted.
 - Routine tests cannot place live calls or messages.
 - Production audit is skipped unless `PULSE_ALLOW_LIVE_AUDIT=true`.
+- Redis-backed durable rate limits are used when rate-limit Redis variables are configured; local development falls back to per-instance memory.
 
 ### Bystander Safety
 
@@ -212,7 +213,7 @@ More detail: [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md)
 | `/api/hospitals?lat={lat}&lng={lng}` | `GET` | Public | Searches and ranks nearby emergency-care options. |
 | `/api/dispatch/session` | `POST` | Public | Issues a short-lived dispatch session token after review. |
 | `/api/dispatch/call` | `POST` | Public + token | Sends the incident brief and starts the live help-contact path. |
-| `/api/dispatch/status?callId={id}` | `GET` | Public status | Returns normalized, redacted call status. |
+| `/api/dispatch/status?statusToken={token}` | `GET` | Public status token | Returns normalized, redacted call status without exposing raw provider call IDs. |
 | `/api/config/health` | `GET` | Public redacted | Returns readiness labels without secrets. |
 | `/api/config/vapi` | `GET/POST` | Protected | Provider diagnostics and controlled operations checks. |
 | `/api/adaption/safety-lab` | `GET/POST` | Protected | Emergency scenario evaluation seed and optional sync. |
@@ -264,7 +265,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | `PULSE_COORDINATION_PHONE` | Live response line | Primary response-line destination. |
 | `PULSE_OPERATOR_PHONE` | Legacy fallback | Still accepted during migration. |
 | `PULSE_RECEIVING_PHONE` | Legacy fallback | Still accepted during migration. |
-| `PULSE_DISPATCH_SESSION_SECRET` | Dispatch token signing | Strongly recommended in production. |
+| `PULSE_DISPATCH_SESSION_SECRET` | Dispatch and status token signing | Required in production. |
+| `PULSE_RATE_LIMIT_REDIS_URL` | Durable rate limiting | Optional locally; recommended for production. Compatible with Upstash Redis REST. |
+| `PULSE_RATE_LIMIT_REDIS_TOKEN` | Durable rate limiting | Required when `PULSE_RATE_LIMIT_REDIS_URL` is set. |
 | `PULSE_OPS_TOKEN` | Protected diagnostics | Required for internal operations routes. |
 
 ### Messaging Variables

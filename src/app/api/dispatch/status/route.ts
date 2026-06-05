@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getClientKey, verifyStatusToken } from "@/lib/dispatch-session";
 import { facilityResponsesFromEvidence, inferHandoffStatus, isFailedCallEndReason } from "@/lib/handoff";
+import { rateLimit } from "@/lib/rate-limit";
 
 function getTwilioAuth() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -22,16 +24,20 @@ function publicEvidenceLabel(handoffStatus: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const callId = request.nextUrl.searchParams.get("callId");
+  const limited = await rateLimit(request, { name: "dispatch-status", limit: 120, windowMs: 60_000 });
+  if (limited) return limited;
+
+  const statusToken = request.nextUrl.searchParams.get("statusToken");
+  const callId = verifyStatusToken(statusToken || undefined, getClientKey(request));
 
   if (!callId) {
-    return NextResponse.json({ error: "callId is required" }, { status: 400 });
+    return NextResponse.json({ error: "A valid status token is required" }, { status: 403 });
   }
 
   if (callId.startsWith("CA")) {
     const twilio = getTwilioAuth();
     if (!twilio) {
-      return NextResponse.json({ error: "Twilio API is not configured" }, { status: 500 });
+      return NextResponse.json({ error: "Status check is not configured" }, { status: 500 });
     }
 
     const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilio.accountSid}/Calls/${callId}.json`, {
@@ -41,9 +47,8 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       return NextResponse.json(
-        { error: "Twilio status failed", details: errorText.slice(0, 300) },
+        { error: "Status check failed" },
         { status: 502 },
       );
     }
@@ -68,7 +73,7 @@ export async function GET(request: NextRequest) {
 
   const apiKey = process.env.VAPI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Vapi API key is not configured" }, { status: 500 });
+    return NextResponse.json({ error: "Status check is not configured" }, { status: 500 });
   }
 
   const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
@@ -78,9 +83,8 @@ export async function GET(request: NextRequest) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
     return NextResponse.json(
-      { error: "Vapi status failed", details: errorText.slice(0, 300) },
+      { error: "Status check failed" },
       { status: 502 },
     );
   }

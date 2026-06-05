@@ -12,8 +12,9 @@ Pulse should be evaluated as a bystander-first emergency assistant with real ser
 
 ## Safety Evidence
 
-- Public dispatch requires a short-lived session token and cooldown.
-- Public status responses are redacted and normalized.
+- Public dispatch requires a short-lived session token bound to the reviewed report and client.
+- Public status responses are redacted and normalized behind encrypted status tokens.
+- Public costly routes are rate limited, with optional Redis-backed durable enforcement.
 - Routine tests are mocked and cannot place live calls or messages.
 - Production audit is explicitly gated by `PULSE_ALLOW_LIVE_AUDIT=true`.
 - Protected diagnostics require `PULSE_OPS_TOKEN`.

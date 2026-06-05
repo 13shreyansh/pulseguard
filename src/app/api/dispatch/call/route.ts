@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkDispatchCooldown, getClientKey, verifyDispatchSession } from "@/lib/dispatch-session";
+import { checkDispatchCooldown, getClientKey, issueStatusToken, verifyDispatchSession } from "@/lib/dispatch-session";
+import { rateLimit } from "@/lib/rate-limit";
 import { getResponseLinePhone } from "@/lib/response-line";
 
 export const maxDuration = 60;
@@ -150,6 +151,48 @@ function getDispatchMode() {
 
 function getCallProvider() {
   return process.env.PULSE_CALL_PROVIDER === "twilio" ? "twilio" : "vapi";
+}
+
+function serverVerifiedTriage(input: TriageResult, transcript: string): TriageResult {
+  const text = transcript.toLowerCase();
+  const emergencyType =
+    /\b(chest|heart|cardiac|not breathing|no pulse|cpr)\b/.test(text)
+      ? "CARDIAC_ARREST"
+      : /\b(breath|choking|airway|oxygen)\b/.test(text)
+        ? "RESPIRATORY_DISTRESS"
+        : /\b(stroke|face droop|slurred|weakness)\b/.test(text)
+          ? "STROKE"
+          : /\b(bleed|blood|hemorrhage|haemorrhage)\b/.test(text)
+            ? "SEVERE_BLEEDING"
+            : /\b(pregnan|labor|labour|birth|obstetric)\b/.test(text)
+              ? "OBSTETRIC_EMERGENCY"
+              : /\b(fall|crash|hit|collision|accident|broken|fracture|injury|road)\b/.test(text)
+                ? "MAJOR_TRAUMA"
+                : "UNKNOWN";
+  const severity =
+    /\b(not breathing|no pulse|unconscious|severe bleeding|heavy bleeding|chest pain)\b/.test(text)
+      ? "critical"
+      : input.severity === "moderate"
+        ? "moderate"
+        : "high";
+  const hospitalTypeByEmergency: Record<string, string> = {
+    MAJOR_TRAUMA: "Trauma-capable emergency care required",
+    CARDIAC_ARREST: "Cardiac-ready emergency department required",
+    RESPIRATORY_DISTRESS: "Emergency department with airway support required",
+    STROKE: "Stroke-capable emergency care required",
+    SEVERE_BLEEDING: "Emergency department with trauma support required",
+    OBSTETRIC_EMERGENCY: "Maternity emergency care required",
+    UNKNOWN: "Emergency department required",
+  };
+
+  return {
+    ...input,
+    emergencyType,
+    severity,
+    hospitalType: hospitalTypeByEmergency[emergencyType],
+    dispatchBrief: `${hospitalTypeByEmergency[emergencyType]}. Bystander report: ${transcript.slice(0, 220)}`,
+    source: input.source,
+  };
 }
 
 function requiresInteractiveCall() {
@@ -424,6 +467,49 @@ function buildCoordinationSession(input: {
       callAttempt: input.callAttempt,
     }),
   };
+}
+
+function publicHospital(hospital?: HospitalCandidate | null) {
+  if (!hospital) return undefined;
+  return {
+    id: hospital.id,
+    name: hospital.name,
+    address: hospital.address,
+    distanceKm: hospital.distanceKm,
+    travelTimeMinutes: hospital.travelTimeMinutes,
+    source: hospital.source,
+    mapsUrl: hospital.mapsUrl,
+    score: hospital.score,
+    confidence: hospital.confidence,
+    rankingReason: hospital.rankingReason,
+  };
+}
+
+function publicCoordinationSession(session: CoordinationSession): CoordinationSession {
+  return {
+    ...session,
+    selectedDestination: publicHospital(session.selectedDestination),
+    contactTargets: session.contactTargets.map((target) => ({
+      id: target.id,
+      type: target.type,
+      name: target.name,
+      status: target.status,
+      note: target.note,
+    })),
+    callAttempts: session.callAttempts.map((attempt) => ({
+      id: attempt.id,
+      targetId: attempt.targetId,
+      targetName: attempt.targetName,
+      targetType: attempt.targetType,
+      status: attempt.status,
+      dialedNumberLabel: attempt.dialedNumberLabel,
+      routing: attempt.routing,
+    })),
+  };
+}
+
+function publicMessageStatus(message: OperatorMessageResult) {
+  return { status: message.status };
 }
 
 function buildOperatorCallScript(body: DispatchRequest, transcript: string, locationLine: string, hospitalName: string) {
@@ -834,6 +920,9 @@ async function verifiedHospitalPackage(request: NextRequest, body: DispatchReque
 }
 
 export async function POST(request: NextRequest) {
+  const requestLimit = await rateLimit(request, { name: "dispatch-call", limit: 3, windowMs: 10 * 60_000 });
+  if (requestLimit) return requestLimit;
+
   const requestBody = (await request.json()) as DispatchRequest;
   const transcript = requestBody.transcript?.trim();
   const triage = requestBody.triage;
@@ -843,7 +932,7 @@ export async function POST(request: NextRequest) {
   }
 
   const clientKey = getClientKey(request);
-  if (!verifyDispatchSession(requestBody.dispatchSessionToken, clientKey)) {
+  if (!verifyDispatchSession(requestBody.dispatchSessionToken, clientKey, transcript)) {
     return NextResponse.json({ error: "Pulse needs a fresh dispatch session before calling for help." }, { status: 403 });
   }
 
@@ -864,7 +953,7 @@ export async function POST(request: NextRequest) {
   try {
     body = {
       ...(await verifiedHospitalPackage(request, requestBody)),
-      triage,
+      triage: serverVerifiedTriage(triage, transcript),
     };
   } catch (error) {
     return NextResponse.json(
@@ -948,24 +1037,14 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      callId: `local-${Date.now()}`,
       status: "ended",
-      receivingPhone: operatorPhone ? "response line" : "not available locally",
-      callTarget: "coordination_session",
-      selectedHospitalPhone: body.hospital?.phone,
       verificationOnly: true,
-      operatorMessage,
-      coordinationSession,
+      operatorMessage: publicMessageStatus(operatorMessage),
+      coordinationSession: publicCoordinationSession(coordinationSession),
       handoffStatus: coordinationSession.handoffStatus,
-      selectedDestination: coordinationSession.selectedDestination,
+      selectedDestination: publicHospital(coordinationSession.selectedDestination),
       summary:
         `Coordination package prepared for ${hospitalName}. No outbound call was placed because local verification mode is enabled.`,
-      transcript: [
-        firstMessage,
-        `Emergency brief prepared for ${hospitalName}: ${body.triage.dispatchBrief}`,
-        locationLine,
-        hospitalPhoneLine,
-      ].join("\n"),
     });
   }
 
@@ -989,7 +1068,7 @@ export async function POST(request: NextRequest) {
 	          operatorMessage.status === "not_configured"
 	            ? "Pulse could not share the incident brief yet."
 	            : "Pulse could not send the incident brief.",
-	        operatorMessage,
+	        operatorMessage: publicMessageStatus(operatorMessage),
 	      },
       { status: 500 },
     );
@@ -1027,9 +1106,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Pulse could not complete the help call.",
-        details: operatorCall.error,
-        diagnosticCode: operatorCall.diagnosticCode,
-        coordinationSession,
+        coordinationSession: publicCoordinationSession(coordinationSession),
         handoffStatus: coordinationSession.handoffStatus,
       },
       { status: 502 },
@@ -1055,17 +1132,17 @@ export async function POST(request: NextRequest) {
     callAttempt,
     facilityResponseStatus: "pending",
   });
+  const statusToken = issueStatusToken({ callId: operatorCall.callId, clientKey });
+  if (!statusToken) {
+    return NextResponse.json({ error: "Pulse could not prepare secure status tracking." }, { status: 500 });
+  }
 
   return NextResponse.json({
-    callId: operatorCall.callId,
     status: operatorCall.status,
-    callProvider: operatorCall.provider,
-    receivingPhone: operatorPhone,
-    callTarget: "coordination_session",
-    selectedHospitalPhone: body.hospital?.phone,
-    selectedDestination: body.hospital,
-    operatorMessage,
-    coordinationSession,
+    statusToken,
+    selectedDestination: publicHospital(body.hospital),
+    operatorMessage: publicMessageStatus(operatorMessage),
+    coordinationSession: publicCoordinationSession(coordinationSession),
     handoffStatus: coordinationSession.handoffStatus,
   });
 }

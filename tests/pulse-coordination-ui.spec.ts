@@ -85,9 +85,9 @@ function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "call
       {
         id: "local-emergency-services",
         type: "emergency_services",
-        name: "Local emergency services",
+        name: "Emergency help line",
         status: "manual_required",
-        note: "Visible fallback action.",
+        note: "Backup contact path.",
       },
     ],
     facilityQuestions: [
@@ -129,8 +129,6 @@ function coordinationSession(handoffStatus: "accepted" | "not_confirmed" | "call
         targetName: hospitals[0].name,
         targetType: "hospital_candidate",
         status: handoffStatus === "calling" ? "queued" : "ended",
-        callId: "call-accepted",
-        callProvider: "vapi",
         dialedNumberLabel: "response line",
         routing: "response_line",
       },
@@ -234,14 +232,10 @@ async function mockIntake(page: Page, handoffStatus: "accepted" | "not_confirmed
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        callId: "call-accepted",
+        statusToken: "mock-status-token",
         status: "ended",
-        callProvider: "vapi",
-        receivingPhone: "response line",
-        callTarget: "coordination_session",
-        selectedHospitalPhone: hospitals[0].phone,
         selectedDestination: hospitals[0],
-        operatorMessage: { status: "sent", provider: "webhook", id: "message-1" },
+        operatorMessage: { status: "sent" },
         handoffStatus,
         coordinationSession: coordinationSession(handoffStatus),
       }),

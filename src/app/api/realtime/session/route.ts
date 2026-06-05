@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 function realtimeTranscriptionModel() {
   const configuredModel = process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL?.trim();
@@ -15,7 +16,10 @@ function realtimeTranscriptionModel() {
   return configuredModel;
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const limited = await rateLimit(request, { name: "realtime-session", limit: 8, windowMs: 60_000 });
+  if (limited) return limited;
+
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -51,9 +55,8 @@ export async function POST() {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
     return NextResponse.json(
-      { error: "OpenAI Realtime session failed", details: errorText.slice(0, 300) },
+      { error: "Realtime speech session failed" },
       { status: 502 },
     );
   }

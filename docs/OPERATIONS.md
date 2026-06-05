@@ -13,6 +13,7 @@ Required for the full live path:
 - `PULSE_COORDINATION_PHONE`
 - Twilio credentials or `PULSE_MESSAGE_WEBHOOK_URL`
 - `PULSE_DISPATCH_SESSION_SECRET`
+- `PULSE_RATE_LIMIT_REDIS_URL` and `PULSE_RATE_LIMIT_REDIS_TOKEN` for durable production rate limits
 
 Protected routes require:
 
@@ -20,10 +21,11 @@ Protected routes require:
 
 ## Deployment Checks
 
-1. Confirm `/api/config/health` returns redacted readiness labels.
+1. Confirm `/api/config/health` returns coarse redacted readiness labels.
 2. Confirm the public flow requires transcript review before send.
 3. Confirm routine tests are mocked and do not place live calls or messages.
 4. Confirm the live audit remains gated unless an intentional provider-path check is underway.
+5. Confirm public status polling uses a status token, not a raw provider call ID.
 
 ## Incident Handling
 

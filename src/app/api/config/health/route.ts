@@ -32,8 +32,6 @@ export async function GET() {
   const vapiConfigured = vapiApiConfigured && vapiPhoneNumberConfigured && responseLineConfigured;
   const callConfigured = callProvider === "twilio" && !interactiveRequired ? twilioVoiceConfigured : vapiConfigured;
   const responseLineReady = callConfigured && (smsConfigured || messageWebhookConfigured);
-  const interactiveCallConfigured = vapiConfigured;
-  const voiceAlertConfigured = twilioVoiceConfigured;
   const dispatchLabel =
     dispatchMode === "dry_run"
       ? "Response-line verification"
@@ -45,29 +43,18 @@ export async function GET() {
 
   return NextResponse.json({
     googlePlaces: {
-      configured: googlePlacesConfigured,
+      status: googlePlacesConfigured ? "ready" : "needs_configuration",
       label: googlePlacesConfigured ? "Hospital search ready" : "Hospital search needs configuration",
     },
     triage: {
-      configured: openaiConfigured,
+      status: openaiConfigured ? "ready" : "needs_configuration",
       label: openaiConfigured ? "AI triage ready" : "AI triage needs configuration",
     },
     speech: {
-      configured: openaiConfigured,
+      status: openaiConfigured ? "ready" : "needs_configuration",
       label: openaiConfigured ? "Realtime voice ready" : "Realtime voice needs configuration",
     },
     dispatch: {
-      vapiConfigured,
-      vapiApiConfigured,
-      vapiPhoneNumberConfigured,
-      responseLineConfigured,
-      smsConfigured,
-      twilioVoiceConfigured,
-      messageWebhookConfigured,
-      callProvider,
-      interactiveRequired,
-      interactiveCallConfigured,
-      voiceAlertConfigured,
       status: dispatchMode === "dry_run" ? "verification" : responseLineReady ? "configured" : "missing_config",
       label: dispatchLabel,
     },

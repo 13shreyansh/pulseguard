@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 
 type GooglePlace = {
   id?: string;
@@ -260,6 +261,9 @@ function unavailableResponse(latitude: number, longitude: number, reason: string
 }
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimit(request, { name: "hospital-search", limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
+
   const latitude = parseCoordinate(request.nextUrl.searchParams.get("lat"), -90, 90);
   const longitude = parseCoordinate(request.nextUrl.searchParams.get("lng"), -180, 180);
   const radiusMeters = parseRadius(request.nextUrl.searchParams.get("radiusMeters"));
@@ -303,11 +307,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       return unavailableResponse(
         latitude,
         longitude,
-        `Google Places search failed. ${errorText.slice(0, 160)}`,
+        "Hospital search could not be completed.",
       );
     }
 
