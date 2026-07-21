@@ -1,8 +1,9 @@
 # Pulse — Build Week Extension Record
 
 > This document separates the pre-existing Pulse prototype from the meaningful
-> extension created during the OpenAI Build Week eligibility period. Replace
-> pending rows with commit-backed evidence before using this record publicly.
+> extension created during the OpenAI Build Week eligibility period. Implemented
+> and deployed work is commit-backed below; visible production E2E, video, and
+> Devpost completion remain pending.
 
 ## Eligibility baseline
 
@@ -63,7 +64,10 @@ explicitly controlled workflow:
 > report. Pulse displays only outcomes supported by explicit desk evidence.
 
 Pulse remains a prototype. It does not contact SCDF, public emergency services, a
-hospital, an ambulance provider, a patient, or a family member.
+hospital, an ambulance provider, a patient, or a family member. The current
+production release is verification-only: the existing configured destination did
+not pass the required Singapore `+65` authorization check, so production sends no
+SMS or webhook and starts no call.
 
 ## Change ledger
 
@@ -77,7 +81,8 @@ Update each row only after implementation, review, and a supporting commit exist
 | Voice integrity | Prevent late transcription overwrite, stale audio, and orphaned microphone tracks | `COMPLETE` | `782a2a4`; local visible QA |
 | Location | Add manual Singapore address/postal-code/landmark input; make GPS optional | `COMPLETE` | `782a2a4`; local visible QA |
 | Hospital context | Make Google data optional and remove capability/availability inference | `COMPLETE` | `047c79d`; local unavailable-state QA |
-| Dispatch target | Identify and contact one fixed server-configured Pulse Controlled Dispatch Desk | `COMPLETE` | `047c79d`; production provider verification pending |
+| Dispatch target enforcement | Accept only a fixed, server-configured, authorized Singapore `+65` Pulse Controlled Dispatch Desk | `COMPLETE` | `047c79d`; production health failed the existing destination closed |
+| Live controlled-desk contact | Send and call an authorized Singapore test desk | `CUT` | No authorized Singapore-format destination is configured; production remains verification-only |
 | Access control | Gate telephony with a private demo code and report/location-bound short-lived token | `COMPLETE` | `047c79d`; signed-token safeguards |
 | Dry-run | Ensure verification-only mode sends no SMS, webhook, or call | `COMPLETE` | `047c79d`; local visible dry-run QA |
 | Evidence model | Separate brief receipt, vehicle assignment, destination, and ETA with recipient excerpts | `COMPLETE` | `047c79d`; safeguard suite |
@@ -87,8 +92,9 @@ Update each row only after implementation, review, and a supporting commit exist
 | Security/privacy | Add bounded input, no-store responses, fixed destinations, safer public claims, and recording controls | `COMPLETE` | `047c79d` |
 | Documentation | Add truthful README, Build Week record, judge instructions, QA ledger, and video materials | `COMPLETE` | Documentation commit containing this record |
 | Licensing | Add the owner-authorized MIT license | `COMPLETE` | Documentation commit containing `LICENSE` |
-| Deployment | Deploy the eligible-period commit to `https://savepulse.vercel.app` | `PENDING` | `[PRODUCTION_SHA / DEPLOYMENT_TIME]` |
-| Controlled E2E | Exercise the actual deployed UI against the authorized desk only | `PENDING` | `[QA_LEDGER_ENTRY / TIMESTAMP]` |
+| Deployment | Deploy the eligible-period merge to `https://savepulse.vercel.app` | `COMPLETE` | `e992347`; Vercel deployment `dpl_FcAsEXJ5qtgi2Sem5vfbkt9R5LT6`; approximately July 22, 2026 at 01:03 IST |
+| Production health | Verify GPT‑5.6, Realtime, provider configuration, Google availability, and the destination boundary | `COMPLETE` | GPT‑5.6, Realtime, Vapi, and Twilio verified; Google unavailable; controlled desk failed closed |
+| Visible production E2E | Exercise the deployed typed/manual and verification-only user journey | `PENDING` | See `docs/submission/QA_LEDGER.md` |
 
 Allowed final statuses are `COMPLETE`, `CUT`, or `BLOCKED`. If a row is cut or
 blocked, update the public story and known limitations instead of implying it is
@@ -100,10 +106,10 @@ complete.
 | --- | --- | --- | --- |
 | GPT-5.6 and controlled-dispatch backend | `047c79d` | July 22, 2026 IST | Code diff and safeguard suite |
 | Ground-up UI and accessibility | `782a2a4` | July 22, 2026 IST | Design references and local responsive QA |
-| Reliability and production contract | `[SHA]` | `[TIME]` | `[QA]` |
-| Documentation and submission assets | `[SHA]` | `[TIME]` | `[FILES]` |
-| Merge to `main` | `[SHA]` | `[TIME]` | `[GITHUB_URL]` |
-| Production deployment | `[SHA]` | `[TIME]` | `[PUBLIC_URL / DEPLOYMENT_EVIDENCE]` |
+| Reliability and production contract | `047c79d`, `782a2a4` | July 22, 2026 IST | Safeguards, build, and local visible QA |
+| Documentation and submission assets | `f73d0cc` | July 22, 2026 at 01:00 IST | README, license, QA ledger, design and submission materials |
+| Merge to `main` | `e992347` | July 22, 2026 at 01:01:30 IST | `https://github.com/13shreyansh/pulseguard/commit/e992347` |
+| Production deployment | `e992347` | Approximately July 22, 2026 at 01:03 IST | `https://savepulse.vercel.app`; Vercel deployment `dpl_FcAsEXJ5qtgi2Sem5vfbkt9R5LT6` |
 
 ## Contribution record
 
@@ -135,19 +141,19 @@ not accurate to claim that the human contributed nothing.
 
 ## Evidence required before submission
 
-- [ ] Meaningful extension commits have eligible-period timestamps.
-- [ ] Each public extension claim maps to a commit or QA artifact.
-- [ ] Production is serving the documented eligible-period SHA.
+- [x] Meaningful extension commits have eligible-period timestamps.
+- [x] Each implemented extension claim maps to a commit or QA artifact.
+- [x] Production is serving the documented eligible-period SHA.
 - [ ] A user-visible GPT-5.6 path is verified in production.
 - [ ] Exact production model identifier is recorded.
 - [ ] Typed/manual-location path works signed out through review.
-- [ ] Controlled dispatch reaches only the authorized desk.
-- [ ] Dry-run reaches nobody.
-- [ ] Evidence receipt matches safe provider evidence.
-- [ ] Ambiguous answers remain Unknown.
-- [ ] Public repository includes the owner-authorized license.
-- [ ] README clearly labels pre-existing and Build Week work.
-- [ ] QA ledger records device, timestamp, scenario, result, and known limitation.
+- [x] Production refuses the unapproved, non-Singapore destination.
+- [x] Production is configured for no-contact verification-only behavior.
+- [x] Local dry-run evidence receipt leaves every unsupported field Unknown.
+- [x] Ambiguous answers remain Unknown in the safeguard suite.
+- [x] Public repository includes the owner-authorized license.
+- [x] README clearly labels pre-existing and Build Week work.
+- [x] QA ledger records the deployed SHA, local device checks, production health, and known limitation.
 - [ ] Video shows the deployed extension and remains under three minutes.
 - [ ] Devpost story contains no pending or unverified claim.
 
@@ -171,13 +177,13 @@ Even after the extension is complete, Pulse must not claim:
 
 ## Final truthful extension statement
 
-Use this paragraph only after all placeholders have been resolved:
-
 > Pulse began Build Week as a pre-existing Next.js emergency-help prototype last
 > updated on June 5, 2026. During the eligible period, Shreyansh directed Codex to
-> create a meaningful extension: `[INSERT VERIFIED EXTENSION SUMMARY]`. The
-> extension uses `[INSERT VERIFIED GPT-5.6 MODEL]` in a user-visible structured
-> observation path, is deployed at `https://savepulse.vercel.app`, and was tested
-> only against an authorized controlled response desk. Pulse remains a controlled
-> prototype and does not contact or represent official emergency services,
-> hospitals, or ambulance providers.
+> add a ground-up interface, GPT‑5.6 structured observations, edit-safe voice
+> capture, incident-bound authorization, fail-closed dispatch controls, and
+> field-specific evidence validation. Merge commit `e992347` is deployed at
+> `https://savepulse.vercel.app`. Production health verified GPT‑5.6, Realtime,
+> Vapi, and Twilio configuration, while Google remained unavailable. Because no
+> authorized Singapore-format desk line is configured, the release runs in
+> verification-only mode and no message or call was made. Pulse does not contact
+> or represent official emergency services, hospitals, or ambulance providers.
