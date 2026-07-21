@@ -11,6 +11,8 @@ test.describe("dispatch session tokens", () => {
     const token = issueDispatchSession({
       clientKey: "198.51.100.10",
       report: "A person fell near the road and may have a broken leg.",
+      incidentId: "incident_123456789",
+      location: "Marina Bay Sands, 018956",
     });
 
     expect(token).toBeTruthy();
@@ -19,6 +21,8 @@ test.describe("dispatch session tokens", () => {
         token || undefined,
         "198.51.100.10",
         "A person fell near the road and may have a broken leg.",
+        "incident_123456789",
+        "Marina Bay Sands, 018956",
       ),
     ).toBe(true);
     expect(
@@ -26,6 +30,8 @@ test.describe("dispatch session tokens", () => {
         token || undefined,
         "198.51.100.11",
         "A person fell near the road and may have a broken leg.",
+        "incident_123456789",
+        "Marina Bay Sands, 018956",
       ),
     ).toBe(false);
     expect(
@@ -33,6 +39,17 @@ test.describe("dispatch session tokens", () => {
         token || undefined,
         "198.51.100.10",
         "A different report should not verify.",
+        "incident_123456789",
+        "Marina Bay Sands, 018956",
+      ),
+    ).toBe(false);
+    expect(
+      verifyDispatchSession(
+        token || undefined,
+        "198.51.100.10",
+        "A person fell near the road and may have a broken leg.",
+        "incident_123456789",
+        "A different location",
       ),
     ).toBe(false);
   });

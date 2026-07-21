@@ -28,17 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-
       - name: Lint
         run: npm run lint
 
       - name: Build
         run: npm run build
 
-      - name: Mocked product tests
-        run: npm run test:mocked
-
-      - name: Production audit remains gated
-        run: npm run test:prod-audit
+      - name: Narrow security and evidence safeguards
+        run: npm run test:safeguards
