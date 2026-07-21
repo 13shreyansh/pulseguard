@@ -195,6 +195,7 @@ export default function PulseApp() {
   const [messageAcknowledged, setMessageAcknowledged] = useState(false);
   const [result, setResult] = useState<DispatchResult | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [runtimeMode, setRuntimeMode] = useState<"checking" | "live" | "dry_run">("checking");
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -217,6 +218,7 @@ export default function PulseApp() {
 
   const reportReady = report.trim().length >= 12 && report.trim().length <= 2_000;
   const captureReady = Boolean(effectiveLocation && reportReady && micState !== "listening" && micState !== "connecting" && micState !== "processing");
+  const verificationOnly = runtimeMode === "dry_run";
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -225,6 +227,15 @@ export default function PulseApp() {
   useEffect(() => {
     sessionStorage.setItem("pulseClientId", clientId);
   }, [clientId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/config/health", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => response.ok ? response.json() as Promise<{ mode?: string }> : null)
+      .then((data) => setRuntimeMode(data?.mode === "dry_run" ? "dry_run" : "live"))
+      .catch(() => setRuntimeMode("checking"));
+    return () => controller.abort();
+  }, []);
 
   const closeMedia = useCallback(() => {
     channelRef.current?.close();
@@ -725,16 +736,20 @@ export default function PulseApp() {
           <div className="hero-copy">
             <span className="eyebrow"><span /> Bystander-first controlled coordination</span>
             <h1 ref={headingRef} tabIndex={-1}>In an accident, every clear detail matters.</h1>
-            <p>Tell Pulse what happened. Review the report. Then send it to our authorized controlled dispatch desk.</p>
-            <Button onClick={startIncident}>Start controlled dispatch <Send size={19} /></Button>
-            <p className="microcopy"><ShieldCheck size={15} /> Nothing reaches the controlled desk until you review and press Send.</p>
+            <p>{verificationOnly
+              ? "Tell Pulse what happened, review the report, and verify the complete handoff without contacting any external desk."
+              : "Tell Pulse what happened. Review the report. Then send it to our authorized controlled dispatch desk."}</p>
+            <Button onClick={startIncident}>{verificationOnly ? "Start controlled verification" : "Start controlled dispatch"} <Send size={19} /></Button>
+            <p className="microcopy"><ShieldCheck size={15} /> {verificationOnly
+              ? "Verification-only deployment: no message, webhook, or call is sent."
+              : "Nothing reaches the controlled desk until you review and press Send."}</p>
           </div>
           <div className="hero-receipt" aria-label="How Pulse works">
             <div className="receipt-top"><PulseMark /><span>One calm path</span><small>CONTROLLED</small></div>
             {[
               ["01", "Capture", "Location plus what you observe"],
               ["02", "Review", "Correct every word before contact"],
-              ["03", "Connect", "One authorized desk receives the brief"],
+              ["03", verificationOnly ? "Verify" : "Connect", verificationOnly ? "Exercise the safe handoff with no external contact" : "One authorized desk receives the brief"],
             ].map(([number, title, copy]) => (
               <div className="receipt-step" key={number}><span>{number}</span><div><strong>{title}</strong><p>{copy}</p></div><CheckCircle2 size={19} /></div>
             ))}
@@ -749,7 +764,9 @@ export default function PulseApp() {
         </section>
         <section className="privacy-note">
           <strong>Clear data flow</strong>
-          <p>Voice audio is streamed to OpenAI only when you choose the microphone. Your reviewed report and location are sent to the controlled desk only after you press Send.</p>
+          <p>Voice audio is streamed to OpenAI only when you choose the microphone. {verificationOnly
+            ? "This deployment verifies the reviewed handoff without sending the report or location to an external desk."
+            : "Your reviewed report and location are sent to the controlled desk only after you press Send."}</p>
         </section>
       </main>
     );
@@ -828,7 +845,7 @@ export default function PulseApp() {
         <div className="screen-heading compact">
           <span className="eyebrow"><span /> Review before contact</span>
           <h1 ref={headingRef} tabIndex={-1}>Check every detail.</h1>
-          <p>Correct the witness report and location. No controlled desk contact has happened.</p>
+          <p>Correct the witness report and location. {verificationOnly ? "This verification run will make no external contact." : "No controlled desk contact has happened."}</p>
         </div>
         <div className="review-layout">
           <div className="review-primary">
@@ -860,7 +877,7 @@ export default function PulseApp() {
             <section className="panel summary-panel">
               <h2>Report contents</h2>
               <div className="summary-line"><MapPin size={18} /><div><strong>Location</strong><p>{effectiveLocation?.label}</p><small>Included in this report · not sent</small></div></div>
-              <div className="summary-line"><ShieldCheck size={18} /><div><strong>Who will be contacted</strong><p>Pulse Controlled Dispatch Desk</p><small>Authorized test desk only</small></div></div>
+              <div className="summary-line"><ShieldCheck size={18} /><div><strong>{verificationOnly ? "External contact" : "Who will be contacted"}</strong><p>{verificationOnly ? "None — verification only" : "Pulse Controlled Dispatch Desk"}</p><small>{verificationOnly ? "No message, webhook, or call" : "Authorized test desk only"}</small></div></div>
             </section>
 
             <section className="panel care-panel">
@@ -873,22 +890,24 @@ export default function PulseApp() {
                 </article>
               ))}
               {careState === "available" && <p className="care-disclosure">Emergency capability and availability are not verified. These listings are never called automatically.</p>}
-              {careState === "unavailable" && <div className="honest-warning"><AlertTriangle size={17} /><p>Nearby hospital data is unavailable. The controlled desk will confirm any destination. Dispatch is not blocked.</p></div>}
+              {careState === "unavailable" && <div className="honest-warning"><AlertTriangle size={17} /><p>Nearby hospital data is unavailable. {verificationOnly ? "The reviewed verification flow remains available." : "The controlled desk will confirm any destination. Dispatch is not blocked."}</p></div>}
             </section>
 
             <section className="panel destination-panel">
-              <span className="destination-label">CONTROLLED DESTINATION</span>
-              <h2>Pulse Controlled Dispatch Desk</h2>
-              <p>This is our authorized test desk, not a hospital shown above and not a public emergency service.</p>
+              <span className="destination-label">{verificationOnly ? "VERIFICATION MODE" : "CONTROLLED DESTINATION"}</span>
+              <h2>{verificationOnly ? "No external contact" : "Pulse Controlled Dispatch Desk"}</h2>
+              <p>{verificationOnly
+                ? "The production workflow is exercised end to end, but no message, webhook, or phone call is made."
+                : "This is our authorized test desk, not a hospital shown above and not a public emergency service."}</p>
               <label className="field-label" htmlFor="access-code">Private judge demo code</label>
               <input id="access-code" type="password" autoComplete="off" value={accessCode} maxLength={128} onChange={(event) => setAccessCode(event.target.value)} placeholder="Enter judge code" />
-              <small>The code authorizes one controlled contact and is cleared immediately afterward.</small>
+              <small>The code authorizes one {verificationOnly ? "controlled verification" : "controlled contact"} and is cleared immediately afterward.</small>
             </section>
           </aside>
         </div>
         <section className="send-confirmation">
-          <label><input type="checkbox" checked={reviewConfirmed} onChange={(event) => setReviewConfirmed(event.target.checked)} /><span><strong>I reviewed the report and location.</strong><small>I understand only the Pulse Controlled Dispatch Desk will be contacted.</small></span></label>
-          <Button onClick={() => void sendToDesk()} disabled={!reviewConfirmed || !accessCode.trim() || !reportReady || briefState === "stale"}>Send to controlled desk <Send size={18} /></Button>
+          <label><input type="checkbox" checked={reviewConfirmed} onChange={(event) => setReviewConfirmed(event.target.checked)} /><span><strong>I reviewed the report and location.</strong><small>{verificationOnly ? "I understand this run makes no external contact." : "I understand only the Pulse Controlled Dispatch Desk will be contacted."}</small></span></label>
+          <Button onClick={() => void sendToDesk()} disabled={!reviewConfirmed || !accessCode.trim() || !reportReady || briefState === "stale"}>{verificationOnly ? "Run controlled verification" : "Send to controlled desk"} <Send size={18} /></Button>
         </section>
         <div className="review-back"><Button variant="ghost" onClick={() => setStep("capture")}><ArrowLeft size={18} /> Edit capture</Button><a href="tel:995"><Phone size={16} /> Real emergency? Call 995</a></div>
       </main>
