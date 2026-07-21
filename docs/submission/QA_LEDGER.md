@@ -84,18 +84,18 @@ complete.
 
 | Scenario | Required result | Actual result | Status | Evidence artifact |
 | --- | --- | --- | --- | --- |
-| Public load | Public landing and review path load | Loaded without application authentication and completed the review journey | Pass | `production-landing-desktop.png`, `production-review-desktop.png` |
-| GPT‑5.6 brief | User-visible structured observation brief | Visible brief returned from `gpt-5.6-sol`; edits were reflected after explicit update | Pass | `production-review-gpt56.png` |
-| Manual/typed path | Review can be completed without GPS or microphone | Manual location and typed synthetic report completed capture and review | Pass | `production-capture-desktop.png` |
+| Public load | Public landing and review path load | Loaded without application authentication and completed the review journey | Pass | `production-landing-desktop.jpg`, `production-review-desktop.jpg` |
+| GPT‑5.6 brief | User-visible structured observation brief | Visible brief returned from `gpt-5.6-sol`; edits were reflected after explicit update | Pass | `production-review-gpt56.jpg` |
+| Manual/typed path | Review can be completed without GPS or microphone | Manual location and typed synthetic report completed capture and review | Pass | `production-capture-desktop.jpg` |
 | Edit ownership | A witness correction remains intact | `left arm` was changed to `left shoulder`; the value persisted and the brief became visibly stale until updated | Pass | Visible browser inspection, 01:11 IST |
-| Google unavailable | Optional care context cannot block the flow | Unavailable warning appeared; verification action remained usable | Pass | `production-review-gpt56.png` |
+| Google unavailable | Optional care context cannot block the flow | Unavailable warning appeared; verification action remained usable | Pass | `production-review-gpt56.jpg` |
 | Demo-code gate | Final verification operation is impossible without the private code | Final button stayed disabled before the private code and review confirmation | Pass | Visible browser inspection |
-| Verification-only terminal state | UI states that no desk contact was made and every evidence field is Unknown | Terminal banner stated no message, webhook, or call; receipt, assignment, destination, and ETA were all Unknown | Pass | `production-result-verification.png` |
+| Verification-only terminal state | UI states that no desk contact was made and every evidence field is Unknown | Terminal banner stated no message, webhook, or call; receipt, assignment, destination, and ETA were all Unknown | Pass | `production-result-verification.jpg` |
 | Double activation | Rapid activation cannot create duplicate contact | A deliberate double activation reached one terminal incident; production dry-run has no outbound side effect | Pass | Visible browser inspection |
 | No-contact boundary | No SMS, webhook, or call occurs | Production reported `dry_run`; the server returned before every outbound transport path | Pass | Production health plus terminal receipt |
 | Live controlled-desk operation | Exactly one authorized Singapore desk operation | Not attempted; no authorized Singapore-format destination is configured | Cut for this release | Production health boundary |
 | Refresh during polling | Polling resumes without creating another operation | Not applicable to the immediate dry-run terminal response; live restoration remains implemented but unexercised | Not run | Documented limitation |
-| 320 and 390 layouts | No horizontal loss or hidden primary action | `scrollWidth` equalled viewport width at both sizes; primary actions remained reachable | Pass | `production-review-mobile-320.png`, `production-review-mobile-390.png` |
+| 320 and 390 layouts | No horizontal loss or hidden primary action | `scrollWidth` equalled viewport width at both sizes; primary actions remained reachable | Pass | `production-review-mobile-320.jpg`, `production-review-mobile-390.jpg` |
 | Keyboard focus | Logical focus with visible focus ring | Tabbing from the review confirmation reached the next available control with a solid outline | Pass | Visible browser inspection |
 | 200% zoom | No horizontal loss | Not explicitly emulated; narrower 320 px layout passed | Not run | Non-blocking documented limitation |
 | Reduced motion and live status | No continuous motion; major state changes announced | Reduced-motion CSS is present and major states appeared in the accessible live region; OS setting not explicitly emulated | Partial | Code inspection and DOM snapshot |

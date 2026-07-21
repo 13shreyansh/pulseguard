@@ -20,7 +20,7 @@
 | Source code | `https://github.com/13shreyansh/pulseguard` | Public, MIT-licensed, deployed application `e7e4bd9`. |
 | Demo video | `[PUBLIC_YOUTUBE_URL]` | Pending: public, playable signed out, and shorter than three minutes. |
 | Gallery image / thumbnail | `docs/screenshots/devpost-thumbnail-3x2.png` | 3:2 composite made from the implemented production product. |
-| Additional gallery images | `production-capture-desktop.png`, `production-review-gpt56.png`, `production-result-verification.png` | Actual production screens; no secrets, numbers, tokens, IDs, or private transcripts. |
+| Additional gallery images | `production-capture-desktop.jpg`, `production-review-gpt56.jpg`, `production-result-verification.jpg` | Actual production screens; no secrets, numbers, tokens, IDs, or private transcripts. |
 | Codex feedback session ID | `019f703a-a871-7022-8096-498e8d54d8dc` | Current project task where the core Build Week extension was built. |
 | Private judge instructions | Use the private draft below. | Put the code only in Devpost's private field. |
 
