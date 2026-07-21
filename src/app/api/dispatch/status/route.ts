@@ -1,115 +1,140 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractDispatchEvidence, unknownEvidence, type DispatchEvidence } from "@/lib/dispatch-evidence";
 import { getClientKey, verifyStatusToken } from "@/lib/dispatch-session";
-import { facilityResponsesFromEvidence, inferHandoffStatus, isFailedCallEndReason } from "@/lib/handoff";
+import { isFailedCallEndReason } from "@/lib/handoff";
 import { rateLimit } from "@/lib/rate-limit";
 
-function getTwilioAuth() {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const username = process.env.TWILIO_API_KEY_SID || accountSid;
-  const password = process.env.TWILIO_API_KEY_SECRET || process.env.TWILIO_AUTH_TOKEN;
+type VapiMessage = { role?: string; speaker?: string; content?: string; text?: string };
+type VapiCall = {
+  status?: string;
+  endedReason?: string;
+  transcript?: string;
+  artifact?: { transcript?: string; messages?: VapiMessage[] };
+  messages?: VapiMessage[];
+};
 
-  if (!accountSid || !username || !password) return null;
+const terminalEvidence = new Map<string, DispatchEvidence>();
 
-  return {
-    accountSid,
-    authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
-  };
+function response(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-function publicEvidenceLabel(handoffStatus: string) {
-  if (handoffStatus === "accepted") return "The receiver clearly said they can receive the person.";
-  if (handoffStatus === "not_confirmed") return "The call did not produce a clear yes.";
-  if (handoffStatus === "failed") return "The call did not complete.";
-  return undefined;
+function transcriptFromMessages(messages?: VapiMessage[]) {
+  return (messages || [])
+    .map((message) => {
+      const role = message.role || message.speaker || "unknown";
+      const content = message.content || message.text || "";
+      return content.trim() ? `${role}: ${content.trim()}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function fullTranscript(call: VapiCall) {
+  return transcriptFromMessages(call.artifact?.messages) ||
+    call.artifact?.transcript?.trim() ||
+    transcriptFromMessages(call.messages) ||
+    call.transcript?.trim() ||
+    "";
+}
+
+export function recipientTranscript(transcript: string) {
+  return transcript
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^(user|customer|recipient|receiver|human)\s*:/i.test(line))
+    .map((line) => line.replace(/^[^:]+:\s*/, ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function unreachableReason(reason?: string) {
+  return Boolean(reason && /busy|no-answer|did-not-answer|rejected|cancelled|canceled/i.test(reason));
+}
+
+function outcomeForEvidence(evidence: DispatchEvidence) {
+  if (evidence.vehicleAssigned.result === "yes") return "dispatch_confirmed";
+  if (evidence.briefReceived.result === "yes") return "desk_receipt_only";
+  if (evidence.briefReceived.result === "no") return "declined";
+  return "technical_failure";
 }
 
 export async function GET(request: NextRequest) {
   const limited = await rateLimit(request, { name: "dispatch-status", limit: 120, windowMs: 60_000 });
   if (limited) return limited;
 
-  const statusToken = request.nextUrl.searchParams.get("statusToken");
-  const callId = verifyStatusToken(statusToken || undefined, getClientKey(request));
-
-  if (!callId) {
-    return NextResponse.json({ error: "A valid status token is required" }, { status: 403 });
-  }
-
+  const callId = verifyStatusToken(request.nextUrl.searchParams.get("statusToken") || undefined, getClientKey(request));
+  if (!callId) return response({ error: "A valid secure status token is required." }, 403);
+  if (callId.startsWith("preflight-")) return response({ error: "This status token cannot be polled." }, 403);
   if (callId.startsWith("CA")) {
-    const twilio = getTwilioAuth();
-    if (!twilio) {
-      return NextResponse.json({ error: "Status check is not configured" }, { status: 500 });
-    }
-
-    const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilio.accountSid}/Calls/${callId}.json`, {
-      headers: {
-        Authorization: twilio.authorization,
-      },
+    return response({
+      status: "failed",
+      terminal: true,
+      outcome: "technical_failure",
+      evidence: unknownEvidence("This call provider did not return speaker-attributed evidence."),
     });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Status check failed" },
-        { status: 502 },
-      );
-    }
-
-    const call = (await response.json()) as {
-      sid?: string;
-      status?: string;
-      duration?: string;
-    };
-    const failedStatuses = new Set(["busy", "failed", "no-answer", "canceled"]);
-    const normalizedStatus =
-      call.status === "completed" ? "ended" : failedStatuses.has(call.status || "") ? "failed" : call.status;
-
-	    return NextResponse.json({
-	      status: normalizedStatus,
-	      handoffStatus: inferHandoffStatus({ status: call.status }),
-	      evidenceLabel: publicEvidenceLabel(inferHandoffStatus({ status: call.status })),
-	      retryable: normalizedStatus === "failed",
-	      facilityResponses: facilityResponsesFromEvidence(inferHandoffStatus({ status: call.status })),
-	    });
-	  }
+  }
 
   const apiKey = process.env.VAPI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "Status check is not configured" }, { status: 500 });
+  if (!apiKey) return response({ error: "Controlled desk status is not configured." }, 503);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
+  let providerResponse: Response;
+  try {
+    providerResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+  } catch {
+    return response({ error: "The controlled desk status check timed out." }, 504);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!providerResponse.ok) return response({ error: "The controlled desk status check failed." }, 502);
+
+  const call = (await providerResponse.json()) as VapiCall;
+  const failed = isFailedCallEndReason(call.endedReason) || call.status === "failed";
+  const terminal = failed || call.status === "ended" || call.status === "completed";
+
+  if (!terminal) {
+    return response({
+      status: call.status || "queued",
+      terminal: false,
+      handoffStatus: call.status === "in-progress" ? "connected" : "calling",
+    });
   }
 
-  const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-  });
-
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: "Status check failed" },
-      { status: 502 },
-    );
+  if (failed) {
+    return response({
+      status: "failed",
+      terminal: true,
+      outcome: unreachableReason(call.endedReason) ? "unreachable" : "technical_failure",
+      evidence: unknownEvidence(unreachableReason(call.endedReason)
+        ? "The controlled desk did not answer the call."
+        : "The provider could not complete the controlled call."),
+    });
   }
 
-  const call = (await response.json()) as {
-    id?: string;
-    status?: string;
-    endedReason?: string;
-    transcript?: string;
-    summary?: string;
-  };
-  const vapiCallFailed = isFailedCallEndReason(call.endedReason);
-  const normalizedStatus = vapiCallFailed ? "failed" : call.status;
-  const handoffStatus = inferHandoffStatus({
-    status: normalizedStatus,
-    endedReason: call.endedReason,
-    transcript: call.transcript,
-    summary: call.summary,
-  });
+  let evidence = terminalEvidence.get(callId);
+  if (!evidence) {
+    const transcript = fullTranscript(call);
+    try {
+      evidence = await extractDispatchEvidence({
+        callId,
+        fullTranscript: transcript,
+        recipientTranscript: recipientTranscript(transcript),
+      });
+    } catch {
+      evidence = unknownEvidence("GPT-5.6 could not verify field-specific recipient evidence.");
+    }
+    terminalEvidence.set(callId, evidence);
+  }
 
-  return NextResponse.json({
-    status: normalizedStatus,
-    handoffStatus,
-    evidenceLabel: publicEvidenceLabel(handoffStatus),
-    retryable: handoffStatus === "failed",
-    facilityResponses: facilityResponsesFromEvidence(handoffStatus, publicEvidenceLabel(handoffStatus)),
+  return response({
+    status: "ended",
+    terminal: true,
+    outcome: outcomeForEvidence(evidence),
+    evidence,
   });
 }

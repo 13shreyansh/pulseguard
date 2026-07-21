@@ -2,13 +2,16 @@
   "name": "pulse",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22 <25"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:mocked": "playwright test tests/pulse-coordination-ui.spec.ts tests/handoff-inference.spec.ts tests/dispatch-session.spec.ts",
-    "test:prod-audit": "playwright test tests/pulse-prod-audit.spec.ts"
+    "test:safeguards": "playwright test --config=playwright.safeguards.config.ts"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

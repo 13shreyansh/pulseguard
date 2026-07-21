@@ -36,6 +36,10 @@ function timingEqual(left: string, right: string) {
 }
 
 export function getClientKey(request: NextRequest) {
+  const browserSession = request.headers.get("x-pulse-client-id")?.trim();
+  if (browserSession && /^[a-zA-Z0-9_-]{12,80}$/.test(browserSession)) {
+    return `browser:${browserSession}`;
+  }
   return (
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     request.headers.get("x-real-ip") ||
@@ -47,32 +51,82 @@ export function dispatchSecretReady() {
   return Boolean(secretMaterial());
 }
 
-export function issueDispatchSession(input: { clientKey: string; report: string }) {
-  const signatureClient = hashValue(input.clientKey);
-  const reportHash = hashValue(input.report);
-  const issuedAt = Date.now();
-  const nonce = crypto.randomBytes(12).toString("base64url");
-  const payload = `${issuedAt}.${nonce}.${signatureClient}.${reportHash}`;
+type DispatchSessionInput = {
+  clientKey: string;
+  report: string;
+  incidentId?: string;
+  location?: string;
+};
+
+export function issueDispatchSession(input: DispatchSessionInput) {
+  const payload = Buffer.from(JSON.stringify({
+    version: 2,
+    issuedAt: Date.now(),
+    nonce: crypto.randomBytes(12).toString("base64url"),
+    clientHash: hashValue(input.clientKey),
+    incidentId: input.incidentId || "legacy",
+    reportHash: hashValue(input.report),
+    locationHash: hashValue(input.location || "legacy"),
+  })).toString("base64url");
   const signature = sign(payload);
   if (!signature) return null;
   return `${payload}.${signature}`;
 }
 
-export function verifyDispatchSession(token: string | undefined, clientKey: string, report: string) {
+export function verifyDispatchSession(
+  token: string | undefined,
+  clientKey: string,
+  report: string,
+  incidentId = "legacy",
+  location = "legacy",
+) {
   if (!token) return false;
   const parts = token.split(".");
-  if (parts.length !== 5) return false;
-  const [issuedAtRaw, nonce, tokenClientHash, tokenReportHash, signature] = parts;
-  if (!issuedAtRaw || !nonce || !tokenClientHash || !tokenReportHash || !signature) return false;
-  const issuedAt = Number(issuedAtRaw);
-  if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > TOKEN_TTL_MS) return false;
-
-  if (!timingEqual(tokenClientHash, hashValue(clientKey))) return false;
-  if (!timingEqual(tokenReportHash, hashValue(report))) return false;
-
-  const payload = `${issuedAtRaw}.${nonce}.${tokenClientHash}.${tokenReportHash}`;
+  if (parts.length !== 2) return false;
+  const [payload, signature] = parts;
+  if (!payload || !signature) return false;
   const expected = sign(payload);
-  return Boolean(expected && timingEqual(signature, expected));
+  if (!expected || !timingEqual(signature, expected)) return false;
+
+  try {
+    const value = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      issuedAt?: number;
+      clientHash?: string;
+      incidentId?: string;
+      reportHash?: string;
+      locationHash?: string;
+    };
+    if (!value.issuedAt || Date.now() - value.issuedAt > TOKEN_TTL_MS || value.issuedAt > Date.now() + 30_000) return false;
+    if (!value.clientHash || !timingEqual(value.clientHash, hashValue(clientKey))) return false;
+    if (!value.reportHash || !timingEqual(value.reportHash, hashValue(report))) return false;
+    if (!value.locationHash || !timingEqual(value.locationHash, hashValue(location))) return false;
+    return value.incidentId === incidentId;
+  } catch {
+    return false;
+  }
+}
+
+export function validDemoAccessCode(value?: string) {
+  const expected = process.env.PULSE_DEMO_ACCESS_CODE?.trim();
+  const supplied = value?.trim();
+  if (!expected || !supplied || supplied.length > 128) return false;
+  return timingEqual(hashValue(supplied), hashValue(expected));
+}
+
+export function isSameOrigin(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin) return process.env.NODE_ENV !== "production";
+  try {
+    const originHost = new URL(origin).host;
+    const allowedHosts = [
+      request.headers.get("host"),
+      request.headers.get("x-forwarded-host")?.split(",")[0]?.trim(),
+      request.nextUrl.host,
+    ].filter(Boolean);
+    return allowedHosts.includes(originHost) && request.headers.get("sec-fetch-site") !== "cross-site";
+  } catch {
+    return false;
+  }
 }
 
 export function issueStatusToken(input: { callId: string; clientKey: string }) {

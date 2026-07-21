@@ -1,453 +1,292 @@
-# Pulse Emergency
+# Pulse
 
-<p align="center">
-  <img src="public/pulse-emergency-logo-512.png" alt="Pulse Emergency logo" width="140" />
-</p>
+**A bystander-first incident brief and evidence-backed handoff to an authorized controlled dispatch desk.**
 
-<p align="center">
-  <strong>Bystander-first emergency guidance, location handoff, nearby-care discovery, and evidence-based help-contact status for the first critical minute.</strong>
-</p>
+[Live product](https://savepulse.vercel.app) · [Build Week extension record](docs/submission/BUILD_WEEK_EXTENSION.md) · [UI exploration](docs/design/UI_DIRECTION.md) · [MIT license](LICENSE)
 
-<p align="center">
-  <a href="https://pulse-beta-two.vercel.app"><strong>Live App</strong></a>
-  ·
-  <a href="docs/DEMO.md">Demo Script</a>
-  ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a>
-  ·
-  <a href="docs/SAFETY_AND_EVALUATION.md">Safety</a>
-  ·
-  <a href="docs/JUDGE_READINESS.md">Judge Readiness</a>
-</p>
+> [!IMPORTANT]
+> Pulse is a controlled prototype. It does not contact SCDF, 995, a hospital, an ambulance provider, a patient, or a family member. For a real emergency in Singapore, call **995**. Outbound prototype contact is fixed to one server-configured, authorized Pulse Controlled Dispatch Desk and requires a private demo code.
 
-<p align="center">
-  <a href="https://github.com/13shreyansh/pulseguard/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/13shreyansh/pulseguard/actions/workflows/ci.yml/badge.svg" />
-  </a>
-  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs" />
-  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
-  <img alt="Vercel" src="https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel" />
-</p>
+## What Pulse is
 
-## Table Of Contents
+In the first minutes after an accident, a bystander may be trying to stay with the person, explain a location, remember useful observations, and coordinate a response at the same time. Pulse turns that confusion into one reviewable sequence:
 
-- [Why Pulse Exists](#why-pulse-exists)
-- [What Pulse Does](#what-pulse-does)
-- [Live Product Flow](#live-product-flow)
-- [System Architecture](#system-architecture)
-- [AI And Provider Stack](#ai-and-provider-stack)
-- [Safety And Truth Guarantees](#safety-and-truth-guarantees)
-- [API Surface](#api-surface)
-- [Local Setup](#local-setup)
-- [Environment Contract](#environment-contract)
-- [Verification](#verification)
-- [Deployment](#deployment)
-- [Operations](#operations)
-- [Repository Quality Evidence](#repository-quality-evidence)
-- [Known Boundaries](#known-boundaries)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
+1. capture a location and witness report;
+2. correct every word;
+3. inspect a factual GPT‑5.6 observation brief;
+4. send the reviewed package to one controlled desk;
+5. show only dispatch outcomes supported by recipient evidence.
 
-## Why Pulse Exists
+Pulse is deliberately not a diagnosis tool, treatment guide, public emergency-service integration, hospital router, or open-ended calling system.
 
-Emergency apps often ask a stressed bystander to make too many decisions too early: explain the incident perfectly, choose where to go, call multiple people, share location, and remember first-aid steps. Pulse is built around a different product principle:
+## The problem
 
-> The bystander should get immediate, calm guidance first. Coordination and provider work should happen in the background, and the UI should only claim what is actually confirmed.
+Unstructured witness reports can omit a location or mix an observation with an assumption. Emergency-domain software creates a second risk when it turns provider transport state—such as a message being accepted or a call ending—into an unsupported operational claim.
 
-Pulse focuses on the first critical minute after an incident. It listens to what happened, locks the browser location, turns the report into simple actions, searches nearby emergency care, prepares a map-linked incident brief, contacts the configured response line, and reports whether help was accepted, unconfirmed, or failed.
+Pulse addresses both problems. GPT‑5.6 structures only what the witness actually said, and the result screen keeps these questions independent:
 
-Live app: [https://pulse-beta-two.vercel.app](https://pulse-beta-two.vercel.app)
+- Did the desk receive the brief?
+- Was a responder or vehicle explicitly assigned?
+- Was a destination explicitly named?
+- Was an ETA explicitly stated?
 
-Repository: [https://github.com/13shreyansh/pulseguard](https://github.com/13shreyansh/pulseguard)
+Unknown stays unknown. A completed call, an assistant statement, or one generic “yes” cannot turn all four fields green.
 
-## What Pulse Does
+## User journey
 
-Pulse combines a public bystander flow with protected internal diagnostics.
+### 1. Capture
 
-| Capability | What It Means |
-| --- | --- |
-| Bystander intake | The user can speak or type what happened in plain language. |
-| Location lock | Browser GPS is requested before intake so the help brief can include a usable map link. |
-| Realtime speech | OpenAI Realtime transcription captures live speech while the user speaks. |
-| Final transcript | Captured browser audio is finalized through a second transcription pass when available. |
-| Review before send | Nothing is shared or called until the bystander confirms the report. |
-| Emergency understanding | Structured triage converts the report into severity, warning, do-now steps, avoid steps, and watch-for signals. |
-| Visual guidance | A calm pictorial guide is generated when image generation is available, with deterministic fallback UI. |
-| Nearby-care discovery | Google Maps/Places and travel-time signals rank emergency-care options near the locked location. |
-| Incident brief | The report, location, map link, selected care option, and safety warning are sent to the configured response line. |
-| Live help contact | Vapi/Twilio-backed calling contacts the configured response line for the deployment. |
-| Evidence-based status | Public status is normalized into accepted, not confirmed, or failed without exposing raw transcripts. |
-| Protected diagnostics | Operational checks and safety lab routes are protected by `PULSE_OPS_TOKEN`. |
+- Use browser geolocation or enter a Singapore address, postal code, or landmark.
+- Speak through optional OpenAI Realtime transcription or type directly.
+- Keep the report editable throughout capture.
+- See `captured on this device`, never `shared`, before dispatch.
 
-## Live Product Flow
+### 2. Review
 
-```text
-Start Emergency Help
-  -> Lock browser location
-  -> Start realtime speech capture
-  -> Finalize transcript from captured audio
-  -> Bystander reviews and edits the report
-  -> Generate structured triage and safety guidance
-  -> Generate or fall back to pictorial guidance
-  -> Search and rank nearby emergency care
-  -> Issue short-lived dispatch session token
-  -> Send map-linked incident brief to response line
-  -> Start live help-contact call
-  -> Poll redacted status evidence
-  -> Show accepted, not confirmed, or failed
+- Correct the witness report and location before desk contact.
+- Inspect the GPT‑5.6 observation brief, including visible `Unknown` values.
+- Optionally view nearby hospitals from Google Maps as context only.
+- See the exact destination: **Pulse Controlled Dispatch Desk**.
+- Enter the private judge/demo code and confirm the reviewed package.
+
+### 3. Connect
+
+- Send one written brief.
+- Start one controlled automated call.
+- Follow independent message, call, response, and evidence states.
+- Restore active polling after a refresh within the bounded status window.
+
+### 4. Evidence receipt
+
+- Green `Dispatch confirmed` requires explicit recipient-side vehicle assignment evidence.
+- Desk receipt without assignment is amber.
+- Destination and ETA remain independently unknown unless stated.
+- Short recipient excerpts are shown; full provider transcripts and identifiers are not.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A["Bystander browser"] -->|"optional voice"| B["OpenAI Realtime"]
+  A -->|"reviewed report"| C["GPT-5.6 Responses API"]
+  A -->|"optional GPS context"| D["Google Maps"]
+  A -->|"signed reviewed package + private code"| E["Next.js controlled dispatch routes"]
+  E -->|"one fixed number"| F["Twilio message + Vapi call"]
+  F --> G["Authorized Pulse Controlled Dispatch Desk"]
+  G -->|"speaker-attributed transcript"| C
+  C -->|"field-specific exact excerpts"| H["Evidence receipt"]
 ```
 
-### User-Facing States
+The browser never supplies a destination phone number. A short-lived HMAC session binds the client session, incident ID, report digest, location digest, timestamp, and nonce. Provider call identifiers stay inside an encrypted, client-bound polling token.
 
-1. **Start**: simple emergency-first landing view with immediate safety reminder.
-2. **Listen**: speech or typed report with clear location and microphone state.
-3. **Review**: final report confirmation before any message or call action.
-4. **Sending**: immediate guidance remains visible while backend work runs.
-5. **Done**: final status is one of:
-   - `accepted`: call evidence supports that help can receive the case,
-   - `not_confirmed`: the call did not produce a clear yes,
-   - `failed`: the call or message path failed.
+## How Pulse uses GPT‑5.6
 
-Pulse never tells the user that help is ready unless returned call evidence supports that result. If help is unconfirmed or failed, the UI keeps local-emergency-services guidance visible.
+Pulse uses the OpenAI Responses API in two user-visible paths.
 
-## System Architecture
+### Structured observation brief
 
-Pulse is a Next.js 16 App Router application with public bystander routes and protected operations routes.
+The primary model is `gpt-5.6-sol`. If the account explicitly rejects that model identifier, the only compatibility fallback is the `gpt-5.6` alias. Pulse never silently substitutes a GPT‑4 model for this showcased path.
 
-```text
-Browser
-  |-- public client UI
-  |-- WebRTC speech stream
-  |-- geolocation
-  |
-Next.js App Router
-  |-- /api/realtime/session
-  |-- /api/speech/finalize
-  |-- /api/triage
-  |-- /api/guidance/infographic
-  |-- /api/hospitals
-  |-- /api/dispatch/session
-  |-- /api/dispatch/call
-  |-- /api/dispatch/status
-  |-- protected /api/config/*
-  |-- protected /api/adaption/safety-lab
-  |
-External Services
-  |-- OpenAI Realtime + transcription + structured triage + image generation
-  |-- Google Maps/Places + Distance Matrix
-  |-- Twilio SMS / voice
-  |-- Vapi outbound calling
-  |-- optional signed message webhook
-```
+The request uses:
 
-Primary code paths:
+- `reasoning.effort: low`;
+- `text.verbosity: low`;
+- strict JSON Schema via `text.format`;
+- `store: false`;
+- a privacy-preserving `safety_identifier`;
+- a bounded timeout and output budget.
 
-- Public UI: [src/app/page.tsx](src/app/page.tsx)
-- Dispatch call route: [src/app/api/dispatch/call/route.ts](src/app/api/dispatch/call/route.ts)
-- Dispatch status route: [src/app/api/dispatch/status/route.ts](src/app/api/dispatch/status/route.ts)
-- Handoff inference: [src/lib/handoff.ts](src/lib/handoff.ts)
-- Dispatch session guard: [src/lib/dispatch-session.ts](src/lib/dispatch-session.ts)
-- Nearby-care search: [src/app/api/hospitals/route.ts](src/app/api/hospitals/route.ts)
-- Triage route: [src/app/api/triage/route.ts](src/app/api/triage/route.ts)
+The schema contains summary, incident type, consciousness, breathing, visible bleeding, people count, location detail, and missing facts. The prompt prohibits diagnosis, severity scoring, treatment instructions, hospital capability claims, dispatch claims, and inference from missing facts.
 
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+If GPT‑5.6 is unavailable, Pulse returns no fabricated fallback brief. The witness’s reviewed words remain usable unchanged.
 
-## AI And Provider Stack
+### Controlled-call evidence
 
-| Layer | Implementation |
-| --- | --- |
-| App framework | Next.js 16 App Router |
-| UI | React 19, TypeScript, Tailwind CSS 4 |
-| Speech intake | OpenAI Realtime transcription over WebRTC |
-| Final transcription | OpenAI audio transcription endpoint |
-| Emergency reasoning | OpenAI JSON-mode structured triage with conservative fallback |
-| Pictorial guidance | OpenAI image generation with deterministic fallback |
-| Nearby-care search | Google Maps/Places and optional travel-time enrichment |
-| Message path | Twilio SMS or signed HTTPS webhook |
-| Live call path | Vapi or Twilio, routed through deployment response line |
-| Hosting | Vercel |
-| Verification | ESLint, Next production build, Playwright mocked product flow |
+After a terminal Vapi call, Pulse preserves speaker boundaries and sends the transcript to GPT‑5.6 once. The model extracts receipt, assignment, destination, ETA, and exact recipient excerpts. Server-side validation then:
 
-## Safety And Truth Guarantees
+- checks each excerpt against recipient-only transcript text;
+- rejects assistant-side or unattributed evidence;
+- rejects a generic affirmation as vehicle assignment;
+- requires explicit assignment language for a responder, unit, vehicle, crew, or ambulance;
+- verifies destination text and numeric ETA independently.
 
-Pulse is built for a high-stress emergency domain, so the repository prioritizes conservative claims and explicit boundaries.
+## OpenAI Realtime voice
 
-### Product Safety
+Voice is optional. When the user chooses the microphone, audio is streamed to OpenAI Realtime for live transcription. Pulse also records a bounded local audio blob and may send it to OpenAI transcription when the user stops, to produce a final transcript.
 
-- GPS is requested before intake begins.
-- Transcript review is required before message or call actions.
-- Public dispatch requires a short-lived session token bound to the client and reviewed report.
-- Public dispatch has a browser/IP cooldown and route-level rate limits.
-- Public status responses are normalized and redacted behind encrypted status tokens.
-- Public UI avoids internal service names, call IDs, readiness labels, and implementation jargon.
-- Unconfirmed handoff states do not render as accepted.
-- Routine tests cannot place live calls or messages.
-- Production audit is skipped unless `PULSE_ALLOW_LIVE_AUDIT=true`.
-- Redis-backed durable rate limits are used when rate-limit Redis variables are configured; local development falls back to per-instance memory.
+Every incident and recording receives its own identifier. Audio chunks are cleared before each recording. Once the user edits the report, late live or final transcription can populate a separate suggestion but cannot overwrite the textarea. Peer connections, data channels, media tracks, recorders, and timers are released on stop, failure, reset, and unmount.
 
-### Bystander Safety
+## Controlled desk messaging and calling
 
-- Pulse keeps immediate actions visible while background work runs.
-- The UI says to call local emergency services when danger is immediate or help is not confirmed.
-- The system does not invent care locations.
-- The system does not claim ambulance dispatch, government EMS involvement, or hospital acceptance unless evidence supports it.
-- The response line path is deployment-configured and documented as such.
+- One fixed Singapore response line is resolved server-side.
+- Browser-supplied phone numbers are not accepted.
+- A private demo code gates outbound contact.
+- A signed session must match the reviewed report, location, incident, and client.
+- Exact incident replay and rapid duplicate attempts are rejected.
+- Secure status-token prerequisites are checked before external contact.
+- The written brief says that receipt does not prove assignment, destination, ETA, or acceptance.
+- The call introduces itself as an automated controlled prototype call.
+- The assistant asks receipt, assignment, destination, and ETA separately.
+- Vapi recording is disabled in the inline assistant and transport configuration.
+- Call duration is capped at 90 seconds and ring timeout at 30 seconds.
 
-### Protected Internal Surfaces
+### Dry-run contract
 
-- `/api/config/vapi` requires `PULSE_OPS_TOKEN`.
-- `/api/adaption/safety-lab` requires `PULSE_OPS_TOKEN`.
-- Protected diagnostics are for maintainers, not the public bystander flow.
+With `PULSE_DISPATCH_MODE=dry_run`, Pulse sends **no SMS, no webhook, and no call**. The UI ends with `Verification only — no desk contact was made`, and every evidence field remains unknown.
 
-More detail: [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md)
+## Nearby hospital context
 
-## API Surface
+Google Maps enrichment is optional and never blocks the controlled handoff. When available, Pulse shows at most three nearby hospital listings ordered by estimated drive time, then straight-line distance. It may show address, map link, distance, travel time, and Google’s operational flag.
 
-| Route | Method | Access | Purpose |
-| --- | --- | --- | --- |
-| `/api/realtime/session` | `POST` | Public | Creates an ephemeral OpenAI Realtime transcription session for browser audio. |
-| `/api/speech/finalize` | `POST` | Public | Runs final transcription over captured browser audio. |
-| `/api/triage` | `POST` | Public | Returns structured emergency classification and bystander guidance. |
-| `/api/guidance/infographic` | `POST` | Public | Generates a calm pictorial guide or fallback result. |
-| `/api/hospitals?lat={lat}&lng={lng}` | `GET` | Public | Searches and ranks nearby emergency-care options. |
-| `/api/dispatch/session` | `POST` | Public | Issues a short-lived dispatch session token after review. |
-| `/api/dispatch/call` | `POST` | Public + token | Sends the incident brief and starts the live help-contact path. |
-| `/api/dispatch/status?statusToken={token}` | `GET` | Public status token | Returns normalized, redacted call status without exposing raw provider call IDs. |
-| `/api/config/health` | `GET` | Public redacted | Returns readiness labels without secrets. |
-| `/api/config/vapi` | `GET/POST` | Protected | Provider diagnostics and controlled operations checks. |
-| `/api/adaption/safety-lab` | `GET/POST` | Protected | Emergency scenario evaluation seed and optional sync. |
+It does not infer or display trauma capability, clinical fit, capacity, acceptance, ambulance availability, or a “suitable hospital” claim. A listing is never called automatically. If the production query fails, the module says it is unavailable and the user can continue.
 
-## Local Setup
+## Privacy and provider data flow
 
-### Requirements
+Pulse does not claim that data “stays private.” The actual flow is:
 
-- Node.js 22 recommended for parity with CI.
-- npm.
-- Browser with microphone and geolocation permissions for local manual testing.
+- microphone audio → OpenAI, only after the user chooses voice capture;
+- GPS coordinates → Google Maps, only for optional nearby context;
+- reviewed report and location → controlled-desk messaging/calling providers, only after Send;
+- terminal provider transcript → GPT‑5.6 for evidence extraction;
+- short validated recipient excerpts → public result screen.
 
-### Install
+The app sets `Cache-Control: no-store` on incident routes, bounds report/location/audio inputs, disables Vapi recording, and does not expose phone numbers, demo codes, call IDs, full transcripts, or provider logs through public responses. Provider processing and retention remain subject to the configured providers’ behavior and account policies.
+
+## Singapore 995 boundary
+
+A persistent `Call 995` link is an escape for real emergencies, not a second Pulse flow. Pulse does not dial 995, represent SCDF, or claim affiliation with the Singapore government. The configured controlled response line must normalize to a Singapore `+65` number or dispatch fails closed.
+
+## Local setup
+
+Requirements:
+
+- Node.js 22–24
+- npm
 
 ```bash
-npm ci
-```
-
-### Configure
-
-```bash
+npm install
 cp .env.example .env.local
-```
-
-Fill only the values needed for the path you are testing. Do not commit `.env.local`.
-
-### Run
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-## Environment Contract
-
-### Core Variables
-
-| Variable | Required For | Notes |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | Speech, triage, images | Required for AI-backed path. |
-| `OPENAI_MODEL` | Triage | Defaults are documented in `.env.example`. |
-| `OPENAI_REALTIME_TRANSCRIPTION_MODEL` | Realtime speech | Use a realtime transcription-compatible model. |
-| `OPENAI_FINAL_TRANSCRIPTION_MODEL` | Final transcript | Used by `/api/speech/finalize`. |
-| `OPENAI_IMAGE_MODEL` | Pictorial guidance | Fallback UI is used if unavailable. |
-| `GOOGLE_MAPS_API_KEY` or `GOOGLE_PLACES_API_KEY` | Nearby-care search | Used by `/api/hospitals`. |
-| `VAPI_API_KEY` | Vapi calls | Required for Vapi live path. |
-| `VAPI_PHONE_NUMBER_ID` | Vapi calls | Must match the active configured Vapi phone number. |
-| `PULSE_COORDINATION_PHONE` | Live response line | Primary response-line destination. |
-| `PULSE_OPERATOR_PHONE` | Legacy fallback | Still accepted during migration. |
-| `PULSE_RECEIVING_PHONE` | Legacy fallback | Still accepted during migration. |
-| `PULSE_DISPATCH_SESSION_SECRET` | Dispatch and status token signing | Required in production. |
-| `PULSE_RATE_LIMIT_REDIS_URL` | Durable rate limiting | Optional locally; recommended for production. Compatible with Upstash Redis REST. |
-| `PULSE_RATE_LIMIT_REDIS_TOKEN` | Durable rate limiting | Required when `PULSE_RATE_LIMIT_REDIS_URL` is set. |
-| `PULSE_OPS_TOKEN` | Protected diagnostics | Required for internal operations routes. |
-
-### Messaging Variables
-
-Use one of these paths:
-
-| Path | Variables |
-| --- | --- |
-| Twilio SMS | `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID` or `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SECRET`, `TWILIO_FROM_NUMBER` or `SMS_FROM_NUMBER` |
-| Message webhook | `PULSE_MESSAGE_WEBHOOK_URL`, optional `PULSE_MESSAGE_WEBHOOK_TOKEN` |
-
-### Recommended Production Defaults
-
-```bash
-PULSE_CALL_PROVIDER=vapi
-PULSE_REQUIRE_INTERACTIVE_CALL=true
-PULSE_DISPATCH_MODE=live
-```
-
-### Live Audit Gate
-
-```bash
-PULSE_ALLOW_LIVE_AUDIT=true
-```
-
-Only set this when deliberately validating the deployed live-service path.
-
-## Verification
-
-### Routine Verification
+Validation:
 
 ```bash
 npm run lint
+npm run test:safeguards
 npm run build
-npm run test:mocked
-npm run test:prod-audit
 ```
 
-Expected routine result:
+The six narrow safeguards cover token binding/encryption, exact evidence excerpts, generic-yes rejection, assistant-evidence rejection, and independent destination/ETA validation. They do not claim that production providers work. Release readiness comes from visible browser E2E against the deployed product and authorized controlled desk.
 
-- lint passes,
-- production build passes,
-- mocked product tests pass,
-- production audit reports one skipped test unless `PULSE_ALLOW_LIVE_AUDIT=true`.
+## Environment variables
 
-### What The Mocked Tests Prove
-
-- The mobile bystander flow reaches accepted help evidence.
-- The mobile bystander flow does not overstate unconfirmed help.
-- Dispatch is not called before transcript review confirmation.
-- Rejection phrases such as `not available`, `full`, and `try another` do not become accepted.
-- Explicit receive confirmation can become accepted.
-- In-flight and failed call states remain distinct.
-
-### Secret Hygiene Check
-
-```bash
-rg -n \
-  -e "sk-[A-Za-z0-9_-]{20,}" \
-  -e "(OPENAI_API_KEY|VAPI_API_KEY|TWILIO_AUTH_TOKEN|TWILIO_API_KEY_SECRET|PULSE_OPS_TOKEN|PULSE_DISPATCH_SESSION_SECRET)\s*=\s*[^\s#]+" \
-  --glob '!node_modules/**' \
-  --glob '!.git/**' \
-  --glob '!.next/**' \
-  --glob '!test-results/**' \
-  --glob '!playwright-report/**' \
-  --glob '!package-lock.json' \
-  .
-```
-
-No matches should be returned.
-
-## Deployment
-
-Pulse is designed for Vercel deployment.
-
-1. Set environment variables in the deployment dashboard.
-2. Keep real secrets out of the repository.
-3. Use `PULSE_DISPATCH_MODE=live` for the full live path.
-4. Keep `PULSE_REQUIRE_INTERACTIVE_CALL=true` when the deployment should require interactive calling.
-5. Verify `/api/config/health` returns redacted readiness labels.
-6. Run routine checks locally or through GitHub Actions before release.
-7. Run live audit only as a controlled operation.
-
-CI is defined in [.github/workflows/ci.yml](.github/workflows/ci.yml).
-
-## Operations
-
-Operational review lives in [docs/OPERATIONS.md](docs/OPERATIONS.md).
-
-Key rules:
-
-- Protected routes require `PULSE_OPS_TOKEN`.
-- Do not copy raw provider transcripts into public issues.
-- Do not run live provider checks accidentally.
-- Treat any call, text, webhook, or provider mutation as an intentional operations drill.
-- If credentials rotate, update deployment environment variables only.
-
-## Repository Quality Evidence
-
-| Evidence | File |
+| Variable | Purpose |
 | --- | --- |
-| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Safety and evaluation | [docs/SAFETY_AND_EVALUATION.md](docs/SAFETY_AND_EVALUATION.md) |
-| Testing | [docs/TESTING.md](docs/TESTING.md) |
-| Operations | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
-| Production readiness | [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) |
-| Judge readiness | [docs/JUDGE_READINESS.md](docs/JUDGE_READINESS.md) |
-| Security | [SECURITY.md](SECURITY.md) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Pull request checklist | [.github/pull_request_template.md](.github/pull_request_template.md) |
-| CI workflow | [.github/workflows/ci.yml](.github/workflows/ci.yml) |
-| Issue templates | [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE) |
+| `OPENAI_API_KEY` | GPT‑5.6 Responses, Realtime, and final transcription |
+| `OPENAI_REALTIME_TRANSCRIPTION_MODEL` | Optional Realtime transcription override |
+| `OPENAI_FINAL_TRANSCRIPTION_MODEL` | Optional final transcription override |
+| `PULSE_DISPATCH_SESSION_SECRET` | HMAC and encrypted status-token material; required in production |
+| `PULSE_DEMO_ACCESS_CODE` | Private outbound-contact gate; never commit or publish |
+| `PULSE_COORDINATION_PHONE` | Canonical fixed authorized `+65` response line |
+| `PULSE_OPERATOR_PHONE`, `PULSE_RECEIVING_PHONE` | Temporary legacy response-line aliases |
+| `PULSE_DISPATCH_MODE` | `live` or fail-closed `dry_run` |
+| `VAPI_API_KEY`, `VAPI_PHONE_NUMBER_ID` | Controlled interactive call |
+| `PULSE_VAPI_MODEL`, `PULSE_VAPI_VOICE_ID` | Vapi assistant model/voice overrides |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Twilio account authentication |
+| `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` | Preferred scoped Twilio credentials |
+| `SMS_FROM_NUMBER`, `TWILIO_FROM_NUMBER` | Controlled message sender |
+| `PULSE_MESSAGE_WEBHOOK_URL`, `PULSE_MESSAGE_WEBHOOK_TOKEN` | Optional fixed HTTPS message transport |
+| `GOOGLE_MAPS_API_KEY`, `GOOGLE_PLACES_API_KEY` | Optional hospital context |
+| `PULSE_RATE_LIMIT_REDIS_URL`, `PULSE_RATE_LIMIT_REDIS_TOKEN` | Optional durable rate-limit store |
 
-## Known Boundaries
+See [.env.example](.env.example) for the full deployment contract. Production health distinguishes `configured` from a non-mutating `verified` probe; an environment variable alone is not called ready.
 
-Pulse is an emergency-domain assistant, not official emergency services.
+## Judge testing instructions
 
-- It does not replace calling the local emergency number.
-- It does not claim ambulance dispatch.
-- It does not invent hospital availability.
-- It does not expose raw call transcripts through the public status route.
-- It depends on deployment configuration for the response line and provider credentials.
-- Live provider tests must be intentional and controlled.
+The real demo access code belongs only in Devpost’s private judge instructions.
 
-## Project Structure
+Recommended synthetic path:
 
-```text
-.
-├── .github/
-│   ├── workflows/ci.yml
-│   ├── ISSUE_TEMPLATE/
-│   ├── CODEOWNERS
-│   └── pull_request_template.md
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── DEMO.md
-│   ├── JUDGE_READINESS.md
-│   ├── OPERATIONS.md
-│   ├── PRODUCTION_READINESS.md
-│   ├── SAFETY_AND_EVALUATION.md
-│   └── TESTING.md
-├── public/
-│   └── pulse-emergency-logo-512.png
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   └── lib/
-│       ├── dispatch-session.ts
-│       ├── handoff.ts
-│       └── response-line.ts
-├── tests/
-│   ├── handoff-inference.spec.ts
-│   ├── pulse-coordination-ui.spec.ts
-│   └── pulse-prod-audit.spec.ts
-├── CONTRIBUTING.md
-├── SECURITY.md
-├── README.md
-├── package.json
-└── playwright.config.ts
-```
+1. Open [savepulse.vercel.app](https://savepulse.vercel.app) in Chrome.
+2. Choose **Start controlled dispatch**.
+3. Enter `Marina Bay Sands, 018956`.
+4. Type: `A cyclist fell near the entrance. They are awake and breathing. Their left arm may be injured. I cannot see severe bleeding.`
+5. Correct one word before review.
+6. Confirm that GPT‑5.6 keeps unstated fields unknown.
+7. Enter the private code, confirm the report, and send once.
+8. Follow the controlled timeline and field-specific evidence receipt.
 
-## Contributing
+Use synthetic data only. Do not test a real emergency, enter patient information, or contact any number outside the configured controlled desk.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+## What existed before Build Week
 
-Before opening a pull request:
+The audited baseline was commit `a83e85c` from June 5, 2026. It already contained a substantial Next.js prototype: voice/text intake, browser geolocation, AI triage, Google hospital lookup, configurable messaging and calling, status polling, and an initial interface.
 
-```bash
-npm run lint
-npm run build
-npm run test:mocked
-```
+It also contained serious defects: GPS and Google were dispatch gates; a selected hospital label did not match the fixed number called; one generic yes could confirm four independent claims; dry-run could still message; transcript edits could be overwritten; call state did not survive refresh; GPT‑5.6 was absent; health reported configuration as readiness; production secrets were incomplete; and the repository had no license or eligible-period extension.
 
-Safety-sensitive changes should explain:
+## What Codex and GPT‑5.6 added during Build Week
 
-- whether public copy changed,
-- whether any path can place live calls or messages,
-- whether status wording can overclaim acceptance,
-- whether any private data or credentials are exposed,
-- and how the change was verified.
+During the eligible period, Shreyansh directed Codex to create a meaningful controlled-dispatch extension:
+
+- a ground-up responsive, accessible interface based on clean-sheet GPT Image exploration;
+- manual location and non-blocking hospital context;
+- edit-safe OpenAI Realtime/final transcription lifecycle;
+- GPT‑5.6 Responses migration with strict observational schema and no medical fallback;
+- one truthful fixed controlled desk with private access gate;
+- fail-closed dry-run behavior;
+- report/location/incident-bound dispatch authorization;
+- encrypted, client-bound provider status;
+- field-specific GPT‑5.6 call evidence with exact recipient-excerpt validation;
+- two-minute bounded polling and refresh restoration;
+- production health probes, security headers, input limits, and provider timeouts;
+- MIT licensing, submission materials, and visible E2E QA.
+
+No commit dates were rewritten and no pre-existing work is presented as Build Week work. See the [extension record](docs/submission/BUILD_WEEK_EXTENSION.md).
+
+## Codex collaboration
+
+Shreyansh supplied the problem, mission, Singapore context, product boundary, and authorized testing environment. Codex performed the repository/production audit, implementation, clean-sheet visual exploration, browser-led QA, documentation, and demo production under that direction. GPT‑5.6 performs runtime observation structure and evidence extraction.
+
+This is a human-directed, Codex-executed collaboration. It would be inaccurate to claim the human had no role.
+
+## Real QA evidence
+
+The [QA ledger](docs/submission/QA_LEDGER.md) records the deployed commit, timestamps, viewport, scenario, outcome, evidence artifact, and known limitation. Key release scenarios include:
+
+- manual location + typed report;
+- GPT‑5.6 unavailable without flow blockage;
+- report edit persistence;
+- Google unavailable without flow blockage;
+- 320 px, 390 px, and desktop layout;
+- keyboard/focus and live status semantics;
+- dry-run no-contact receipt;
+- duplicate-click containment;
+- production GPT‑5.6 brief;
+- authorized controlled-desk terminal evidence;
+- refresh recovery during status polling.
+
+Mocked browser flows are not presented as production evidence. No real emergency service, hospital, ambulance provider, patient, family member, or unauthorized number is used in testing.
+
+## Known limitations
+
+- Pulse is not integrated with SCDF or any public emergency service.
+- It has no official hospital, ambulance, capacity, assignment, or ETA integration.
+- Google hospital context may be unavailable and is not clinical routing evidence.
+- In-memory replay protection and rate limiting are instance-local unless a durable Redis store is configured.
+- Provider transcripts depend on Vapi preserving speaker attribution; without it, evidence stays unknown.
+- Disabling recording in Pulse configuration cannot make claims beyond the providers’ documented behavior and account settings.
+- This prototype has not undergone clinical validation, emergency-dispatch certification, legal review, privacy assessment, or accessibility certification.
+- Official deployment would require formal emergency-service, clinical, privacy, legal, and operational partnerships.
+
+## Future path
+
+The next step is partnership work, not a broader public calling loop. With official providers, Pulse’s evidence model could be mapped to real dispatch protocols, consent and retention requirements, clinical governance, localization, reliability targets, and audited integrations. Until then, the product remains explicitly controlled.
+
+## Design exploration
+
+The [design direction record](docs/design/UI_DIRECTION.md) includes exact GPT Image prompts, independent no-reference directions, a weighted selection rubric, and final mobile/desktop reference boards. Those generated boards are labeled exploration only. The shipped product is accessible React and CSS; generated screenshots are not embedded as the UI or used as Devpost product evidence.
+
+## License
+
+Pulse is available under the [MIT License](LICENSE).

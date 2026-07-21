@@ -26,33 +26,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "OpenAI Realtime is not configured" }, { status: 500 });
   }
 
-  const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      session: {
-        type: "transcription",
-        audio: {
-          input: {
-            format: {
-              type: "audio/pcm",
-              rate: 24000,
-            },
-            noise_reduction: { type: "near_field" },
-            transcription: {
-              model: realtimeTranscriptionModel(),
-              language: "en",
-              delay: process.env.OPENAI_REALTIME_TRANSCRIPTION_DELAY || "low",
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session: {
+          type: "transcription",
+          audio: {
+            input: {
+              format: {
+                type: "audio/pcm",
+                rate: 24000,
+              },
+              noise_reduction: { type: "near_field" },
+              transcription: {
+                model: realtimeTranscriptionModel(),
+                language: "en",
+                delay: process.env.OPENAI_REALTIME_TRANSCRIPTION_DELAY || "low",
+              },
             },
           },
+          include: ["item.input_audio_transcription.logprobs"],
         },
-        include: ["item.input_audio_transcription.logprobs"],
-      },
-    }),
-  });
+      }),
+    });
+  } catch {
+    return NextResponse.json({ error: "Realtime speech session timed out" }, { status: 504 });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     return NextResponse.json(
@@ -79,9 +89,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "OpenAI Realtime session did not return a client secret" }, { status: 502 });
   }
 
-  return NextResponse.json({
-    id: data.session?.id || data.id,
-    clientSecret,
-    expiresAt: data.client_secret?.expires_at || data.expires_at,
-  });
+  return NextResponse.json(
+    {
+      id: data.session?.id || data.id,
+      clientSecret,
+      expiresAt: data.client_secret?.expires_at || data.expires_at,
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
