@@ -13,7 +13,7 @@
 - Music: none
 - Hard duration limit: under 3:00
 - Footage: actual deployed product at `https://savepulse.vercel.app`
-- Deployed merge: `e992347`
+- Deployed application: `e7e4bd9`
 - Incident: synthetic only
 - Contact: none; production `dry_run` sends no SMS or webhook and starts no call
 - Public video URL: `[PUBLIC_YOUTUBE_URL]` — pending
@@ -40,7 +40,7 @@
 
 - Landing headline and `Controlled prototype` label
 - Highlight `Call 995 for a real emergency`
-- Tap `Start controlled dispatch`
+- Tap `Start controlled verification`
 
 **Narration**
 
@@ -171,14 +171,14 @@ Week audit, implementation, visual exploration, local QA, documentation, and dem
 preparation under that direction.
 ```
 
-## Video verification — pending
+## Video verification
 
-- [ ] Final duration is below 3:00.
-- [ ] Opening identifies Codex and GPT-5.6 accurately.
-- [ ] The UI shown is deployed merge `e992347` or its documented successor.
-- [ ] The incident is synthetic.
-- [ ] Narration states that no outbound contact occurred.
-- [ ] No official-service, hospital, or ambulance affiliation is implied.
-- [ ] No access code, number, token, ID, provider dashboard, or private transcript is visible.
-- [ ] Captions match narration and remain legible on mobile playback.
+- [x] Final duration is 2:20.10, below 3:00.
+- [x] Opening identifies Codex and GPT-5.6 accurately.
+- [x] The UI shown is deployed application commit `e7e4bd9` or its documented successor.
+- [x] The incident is synthetic.
+- [x] Narration states that no outbound contact occurred.
+- [x] No official-service, hospital, or ambulance affiliation is implied.
+- [x] No access code, number, token, ID, provider dashboard, or private transcript is visible.
+- [x] Burned-in English captions are present and visually legible.
 - [ ] Public video plays in a signed-out browser.

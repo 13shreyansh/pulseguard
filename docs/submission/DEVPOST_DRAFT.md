@@ -1,8 +1,7 @@
 # Pulse — Devpost Submission Draft
 
 > Submission draft. Implemented code and production health facts are resolved
-> below. Public video, gallery assets, Codex feedback session ID, visible
-> production E2E, and final Devpost submission remain pending. Never put the real
+> below. Public video and final Devpost submission remain pending. Never put the real
 > demo access code, a phone number, provider identifier, private transcript, or
 > patient data in this repository.
 
@@ -18,11 +17,11 @@
 | Project story | Use the resolved draft below. | Update only the pending release artifacts. |
 | Built with | GPT-5.6, Codex, OpenAI Responses API, OpenAI Realtime API, Next.js, React, TypeScript, Vercel, Vapi, Twilio | Google Maps is omitted because its production query is unavailable. Vapi/Twilio are implemented and health-verified but inactive in production verification-only mode. |
 | Try it out | `https://savepulse.vercel.app` | Complete the safe typed production path signed out. |
-| Source code | `https://github.com/13shreyansh/pulseguard` | Public, MIT-licensed, deployed merge `e992347`. |
+| Source code | `https://github.com/13shreyansh/pulseguard` | Public, MIT-licensed, deployed application `e7e4bd9`. |
 | Demo video | `[PUBLIC_YOUTUBE_URL]` | Pending: public, playable signed out, and shorter than three minutes. |
-| Gallery image / thumbnail | `[FINAL_PRODUCT_COMPOSITE_PATH]` | Pending: 3:2 implemented-product composite, not a generated UI concept. |
-| Additional gallery images | `[CAPTURE_SCREENSHOT]`, `[REVIEW_SCREENSHOT]`, `[EVIDENCE_SCREENSHOT]` | Pending: remove secrets, numbers, tokens, IDs, and private transcripts. |
-| Codex feedback session ID | `[CURRENT_CODEX_FEEDBACK_SESSION_ID]` | Pending: obtain from the current task's `/feedback` flow. |
+| Gallery image / thumbnail | `docs/screenshots/devpost-thumbnail-3x2.png` | 3:2 composite made from the implemented production product. |
+| Additional gallery images | `production-capture-desktop.png`, `production-review-gpt56.png`, `production-result-verification.png` | Actual production screens; no secrets, numbers, tokens, IDs, or private transcripts. |
+| Codex feedback session ID | `019f703a-a871-7022-8096-498e8d54d8dc` | Current project task where the core Build Week extension was built. |
 | Private judge instructions | Use the private draft below. | Put the code only in Devpost's private field. |
 
 Also complete any Devpost-required account, eligibility, rules, or ownership
@@ -110,8 +109,8 @@ Pulse uses GPT-5.6 through the OpenAI Responses API with Structured Outputs for 
 narrow, user-visible task: converting the reviewed witness report into a compact
 observation brief. The schema favors explicit unknown values and prohibits
 diagnosis, medical instructions, provider capability claims, and dispatch claims.
-Production health verified the GPT-5.6 integration; visible production E2E is
-recorded separately as pending in the QA ledger.
+Production health and the visible production journey verified the GPT-5.6
+integration. The observation brief reported the exact model `gpt-5.6-sol`.
 
 The code also contains a live-mode evidence path that uses GPT-5.6 to extract
 separate recipient answers, then verifies exact recipient-side excerpts and
@@ -177,7 +176,8 @@ truthful controlled dispatch:
 - added an MIT license, accurate project documentation, a QA ledger, and Build Week media plans.
 
 The eligible-period backend commit is `047c79d`, the interface commit is
-`782a2a4`, the documentation commit is `f73d0cc`, and merge `e992347` is deployed.
+`782a2a4`, the documentation commit is `f73d0cc`, and application commit
+`e7e4bd9` is deployed.
 
 ### Challenges
 
@@ -194,15 +194,19 @@ work from changing the active report.
 
 ### Real user testing
 
-Local visible QA covered the manual-location and typed-report path, edit
-persistence, model and Google unavailable states, verification-only completion,
-duplicate activation containment, and responsive layouts at 390×844 and 320×568.
-Lint, production build, and six narrow token/evidence safeguards passed.
+Visible production QA covered the manual-location and typed-report path, witness
+edit persistence, a user-visible `gpt-5.6-sol` brief, Google unavailable state,
+private-code gate, verification-only completion, deliberate double activation,
+keyboard focus, and responsive layouts at desktop, 390×844, and 320×568. The
+manual/typed journey passed without horizontal loss, and every unsupported
+evidence field remained `Unknown`.
 
-The eligible-period merge is deployed, and production health verified GPT-5.6,
-Realtime, Vapi, and Twilio while reporting Google unavailable and the controlled
-desk fail-closed. Visible production E2E is still pending and will be added to the
-QA ledger; mocked DOM flows are not presented as production proof.
+Production health separately verified GPT-5.6, Realtime, Vapi, and Twilio while
+reporting Google unavailable and the controlled desk fail-closed. Chrome's native
+microphone permission prompt remained pending, so the voice path is documented
+as blocked rather than presented as passed. Lint, production build, and six
+narrow token/evidence safeguards also passed. Mocked DOM flows are not presented
+as production proof.
 
 ### Privacy and safety
 
@@ -250,7 +254,7 @@ Production mode: verification-only; no SMS, webhook, or call is sent.
 
 Recommended synthetic test:
 1. Open the production URL in Chrome.
-2. Choose “Start controlled dispatch.”
+2. Choose “Start controlled verification.”
 3. Use manual location: “Marina Bay Sands, 018956”.
 4. Type: “A cyclist fell near the entrance. They are awake and breathing. Their
    left arm may be injured. I cannot see severe bleeding.”
@@ -267,22 +271,23 @@ Please do not enter real patient data or try a real emergency. Use the direct 99
 escape for a real Singapore emergency.
 
 Known production limitations: Google hospital context is unavailable; live
-controlled-desk transport is disabled; visible production E2E is pending.
-Tested production commit: e992347
-Last visible production E2E: [PENDING_VISIBLE_PRODUCTION_E2E]
+controlled-desk transport is disabled; Chrome's microphone permission remained
+pending during production QA.
+Tested production commit: e7e4bd9
+Last visible production E2E: July 22, 2026, approximately 01:10–01:14 IST
 ```
 
 ## Final pre-submit checklist
 
-- [ ] Visible production typed/manual path and GPT-5.6 brief are recorded in the QA ledger.
+- [x] Visible production typed/manual path and GPT-5.6 brief are recorded in the QA ledger.
 - [x] Build Week extension commits fall inside the eligible period.
 - [x] Repository is public and includes the MIT license.
-- [x] Production serves merge `e992347`.
+- [x] Production serves application commit `e7e4bd9`.
 - [x] Production is verification-only and does not claim a live desk operation.
 - [ ] YouTube video is public, signed-out playable, and under three minutes.
-- [ ] Gallery images show the implemented product and expose no private data.
+- [x] Gallery images show the implemented product and expose no private data.
 - [x] Built-with draft omits Google Maps while its production request is unavailable.
-- [ ] `/feedback` session ID is present.
+- [x] `/feedback` session ID is present.
 - [ ] Demo code appears only in the private judge field.
 - [x] Private instructions describe the no-contact production result.
 - [ ] Country, submitter type, ownership, and rules attestations are confirmed in Devpost.

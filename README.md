@@ -10,12 +10,14 @@
 ## Current production release
 
 - URL: [savepulse.vercel.app](https://savepulse.vercel.app)
-- Deployed merge commit: `e992347`
-- Deployment: `dpl_FcAsEXJ5qtgi2Sem5vfbkt9R5LT6`, deployed around July 22, 2026 at 01:03 IST
+- Deployed application commit: `e7e4bd9`
+- Deployment: `dpl_8mHxF7LejANyF4jFFtjKrvpDTvma`, deployed around July 22, 2026 at 01:09 IST
 - Verified by production health probes: GPT‑5.6, OpenAI Realtime, Vapi, and Twilio
 - Unavailable: Google nearby-hospital context
 - Fail-closed boundary: the configured destination did not pass the required Singapore `+65` authorization check, so production was deliberately set to `dry_run`
-- Still pending: visible production end-to-end QA, demo video publication, and Devpost submission
+- Visible production QA: manual/typed journey, `gpt-5.6-sol` brief, fail-closed gate, evidence receipt, and 320/390/desktop layouts passed
+- Known QA boundary: Chrome's native microphone permission remained pending
+- Still pending: demo video publication and Devpost submission
 
 Provider configuration is not evidence that an outbound operation occurred. No production message or call was made for this release.
 
@@ -195,7 +197,7 @@ npm run test:safeguards
 npm run build
 ```
 
-The six narrow safeguards cover token binding/encryption, exact evidence excerpts, generic-yes rejection, assistant-evidence rejection, and independent destination/ETA validation. They do not claim that a production handoff occurred. Visible production E2E remains a separate release check; the current safe terminal state is verification-only with no outbound contact.
+The six narrow safeguards cover token binding/encryption, exact evidence excerpts, generic-yes rejection, assistant-evidence rejection, and independent destination/ETA validation. They do not claim that a production handoff occurred. Visible production QA separately verified the current no-contact terminal state.
 
 ## Environment variables
 
@@ -227,7 +229,7 @@ The real demo access code belongs only in Devpost’s private judge instructions
 Recommended production verification path:
 
 1. Open [savepulse.vercel.app](https://savepulse.vercel.app) in Chrome.
-2. Choose **Start controlled dispatch**.
+2. Choose **Start controlled verification**.
 3. Enter `Marina Bay Sands, 018956`.
 4. Type: `A cyclist fell near the entrance. They are awake and breathing. Their left arm may be injured. I cannot see severe bleeding.`
 5. Correct one word before review.
@@ -270,7 +272,7 @@ This is a human-directed, Codex-executed collaboration. It would be inaccurate t
 
 ## Real QA evidence
 
-The [QA ledger](docs/submission/QA_LEDGER.md) records the deployed commit, timestamps, viewport, scenario, outcome, evidence artifact, and known limitation. Local checks are complete; visible production E2E is still pending. Key release scenarios include:
+The [QA ledger](docs/submission/QA_LEDGER.md) records the deployed commit, timestamps, viewport, scenario, outcome, evidence artifact, and known limitation. Local checks and the visible production manual/typed journey are complete; the microphone path remains blocked by Chrome's native permission prompt. Key release scenarios include:
 
 - manual location + typed report;
 - GPT‑5.6 unavailable without flow blockage;

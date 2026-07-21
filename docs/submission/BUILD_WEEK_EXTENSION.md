@@ -2,8 +2,8 @@
 
 > This document separates the pre-existing Pulse prototype from the meaningful
 > extension created during the OpenAI Build Week eligibility period. Implemented
-> and deployed work is commit-backed below; visible production E2E, video, and
-> Devpost completion remain pending.
+> and deployed work is commit-backed below; the visible manual/typed production
+> journey is complete, while video and Devpost completion remain pending.
 
 ## Eligibility baseline
 
@@ -92,9 +92,9 @@ Update each row only after implementation, review, and a supporting commit exist
 | Security/privacy | Add bounded input, no-store responses, fixed destinations, safer public claims, and recording controls | `COMPLETE` | `047c79d` |
 | Documentation | Add truthful README, Build Week record, judge instructions, QA ledger, and video materials | `COMPLETE` | Documentation commit containing this record |
 | Licensing | Add the owner-authorized MIT license | `COMPLETE` | Documentation commit containing `LICENSE` |
-| Deployment | Deploy the eligible-period merge to `https://savepulse.vercel.app` | `COMPLETE` | `e992347`; Vercel deployment `dpl_FcAsEXJ5qtgi2Sem5vfbkt9R5LT6`; approximately July 22, 2026 at 01:03 IST |
+| Deployment | Deploy the eligible-period application to `https://savepulse.vercel.app` | `COMPLETE` | `e7e4bd9`; Vercel deployment `dpl_8mHxF7LejANyF4jFFtjKrvpDTvma`; approximately July 22, 2026 at 01:09 IST |
 | Production health | Verify GPT‑5.6, Realtime, provider configuration, Google availability, and the destination boundary | `COMPLETE` | GPT‑5.6, Realtime, Vapi, and Twilio verified; Google unavailable; controlled desk failed closed |
-| Visible production E2E | Exercise the deployed typed/manual and verification-only user journey | `PENDING` | See `docs/submission/QA_LEDGER.md` |
+| Visible production E2E | Exercise the deployed typed/manual and verification-only user journey | `COMPLETE` | `gpt-5.6-sol`, fail-closed terminal receipt, and responsive QA recorded in `docs/submission/QA_LEDGER.md` |
 
 Allowed final statuses are `COMPLETE`, `CUT`, or `BLOCKED`. If a row is cut or
 blocked, update the public story and known limitations instead of implying it is
@@ -109,7 +109,8 @@ complete.
 | Reliability and production contract | `047c79d`, `782a2a4` | July 22, 2026 IST | Safeguards, build, and local visible QA |
 | Documentation and submission assets | `f73d0cc` | July 22, 2026 at 01:00 IST | README, license, QA ledger, design and submission materials |
 | Merge to `main` | `e992347` | July 22, 2026 at 01:01:30 IST | `https://github.com/13shreyansh/pulseguard/commit/e992347` |
-| Production deployment | `e992347` | Approximately July 22, 2026 at 01:03 IST | `https://savepulse.vercel.app`; Vercel deployment `dpl_FcAsEXJ5qtgi2Sem5vfbkt9R5LT6` |
+| Verification-mode UI | `dbbe959` | July 22, 2026 IST | Runtime copy reflects the production no-contact boundary before action |
+| Production deployment | `e7e4bd9` | Approximately July 22, 2026 at 01:09 IST | `https://savepulse.vercel.app`; Vercel deployment `dpl_8mHxF7LejANyF4jFFtjKrvpDTvma` |
 
 ## Contribution record
 
@@ -144,9 +145,9 @@ not accurate to claim that the human contributed nothing.
 - [x] Meaningful extension commits have eligible-period timestamps.
 - [x] Each implemented extension claim maps to a commit or QA artifact.
 - [x] Production is serving the documented eligible-period SHA.
-- [ ] A user-visible GPT-5.6 path is verified in production.
-- [ ] Exact production model identifier is recorded.
-- [ ] Typed/manual-location path works signed out through review.
+- [x] A user-visible GPT-5.6 path is verified in production.
+- [x] Exact production model identifier is recorded: `gpt-5.6-sol`.
+- [x] Typed/manual-location path works without application authentication through review.
 - [x] Production refuses the unapproved, non-Singapore destination.
 - [x] Production is configured for no-contact verification-only behavior.
 - [x] Local dry-run evidence receipt leaves every unsupported field Unknown.
@@ -181,7 +182,7 @@ Even after the extension is complete, Pulse must not claim:
 > updated on June 5, 2026. During the eligible period, Shreyansh directed Codex to
 > add a ground-up interface, GPT‑5.6 structured observations, edit-safe voice
 > capture, incident-bound authorization, fail-closed dispatch controls, and
-> field-specific evidence validation. Merge commit `e992347` is deployed at
+> field-specific evidence validation. Application commit `e7e4bd9` is deployed at
 > `https://savepulse.vercel.app`. Production health verified GPT‑5.6, Realtime,
 > Vapi, and Twilio configuration, while Google remained unavailable. Because no
 > authorized Singapore-format desk line is configured, the release runs in
