@@ -202,6 +202,13 @@ or Devpost testing. The Devpost manager thread still contained no organizer
 reply, so the actionable request remains with the published hackathon manager
 and Devpost operations; Codex did not send another duplicate message.
 
+At 10:14 IST, a third registered-account response check found no reply from the
+hackathon manager, Devpost support/testing, or the Devpost manager thread. The
+only newer inbox item was unrelated. Opening draft `1080636` again returned the
+closed-hackathon message and did not expose any editable submission fields.
+Completion now requires an organizer-controlled late link or draft reopening;
+there is no remaining non-duplicative action that can create that permission.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
