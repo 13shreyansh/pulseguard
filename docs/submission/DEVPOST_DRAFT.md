@@ -3,9 +3,11 @@
 > The portfolio project was saved and publicly verified at
 > `https://devpost.com/software/pulse-gkw6ul`. The OpenAI Build Week entry remains
 > a closed `Draft — 1/5 steps done`; public video and final contest submission are
-> pending an organizer-enabled late-submission link. Never put the real demo
-> access code, a phone number, provider identifier, private transcript, or patient
-> data in this repository.
+> pending an organizer-enabled late-submission link. A private request containing
+> the Codex session ID and release evidence was sent to the organizer on July 22,
+> 2026 at approximately 09:45 IST and visibly confirmed by Devpost. Never put the
+> real demo access code, a phone number, provider identifier, private transcript,
+> or patient data in this repository.
 
 ## Required submission fields
 

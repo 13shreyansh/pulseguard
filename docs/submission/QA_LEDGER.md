@@ -117,10 +117,23 @@ complete.
 
 ## Sign-off
 
+### Devpost recovery record
+
+At approximately July 22, 2026 at 09:45 IST, the project owner authorized and
+Codex sent a private late-submission request through the OpenAI Build Week
+submission's **Message manager** thread. Devpost displayed `Your message has been
+sent!` and the thread showed the message less than a minute old. The request
+included the production URL, public Devpost portfolio project, public repository,
+this QA ledger, and Codex session/feedback ID
+`019f703a-a871-7022-8096-498e8d54d8dc`. It accurately explained that the final
+personal rules attestation and Submit action were not completed before the
+deadline. An organizer-provided late-submission link remains pending and is not
+assumed.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
 remains blocked by the native browser permission prompt, and live polling is not
-applicable to the immediate dry-run result. Video publication and Devpost
-submission remain pending. This ledger does not claim that a message or call
-occurred.
+applicable to the immediate dry-run result. Video publication and Build Week
+submission remain pending the organizer's response. This ledger does not claim
+that a message or call occurred.
