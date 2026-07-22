@@ -139,6 +139,20 @@ personal attestation, linked the same session and release evidence, and requeste
 that the case be routed to Build Week submission operations. No private staff
 email address was guessed or scraped.
 
+At 09:51 IST, Gmail returned a delivery failure for
+`build-week-event@openai.com`: the published Google group may not exist or may
+not permit outside posting. No delivery failure was reported for the two Devpost
+addresses. At approximately 09:54 IST, Codex sent the same factual routing request
+to OpenAI's officially published support address, `support@openai.com`; Gmail
+confirmed `Message sent`. At approximately 09:56 IST, Codex sent one restrained
+routing-only note to two Build Week judges whose contact addresses are explicitly
+published on their own websites: Kath Korevec (`kathy@korevec.com`) and Peter
+Steinberger (`peter@steipete.me`). The note stated that it was not a request to
+influence judging and asked only that the operational appeal be forwarded to the
+event owner. No guessed address was used for Thibault Sottiaux, Tara Seshan, or
+Leah Belsky. An immediate targeted Gmail check showed no delivery failure for the
+support or judge messages.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
