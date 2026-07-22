@@ -2,7 +2,7 @@
 
 **A bystander-first incident brief and evidence-aware controlled handoff.**
 
-[Live product](https://savepulse.vercel.app) · [Build Week extension record](docs/submission/BUILD_WEEK_EXTENSION.md) · [UI exploration](docs/design/UI_DIRECTION.md) · [MIT license](LICENSE)
+[Live product](https://savepulse.vercel.app) · [Devpost project](https://devpost.com/software/pulse-gkw6ul) · [Build Week extension record](docs/submission/BUILD_WEEK_EXTENSION.md) · [UI exploration](docs/design/UI_DIRECTION.md) · [MIT license](LICENSE)
 
 > [!IMPORTANT]
 > Pulse is a controlled prototype. It does not contact SCDF, 995, a hospital, an ambulance provider, a patient, or a family member. For a real emergency in Singapore, call **995**. The current production release runs in **verification-only mode**: it sends no SMS or webhook and starts no call because no authorized Singapore-format controlled-desk line is configured.
@@ -17,7 +17,8 @@
 - Fail-closed boundary: the configured destination did not pass the required Singapore `+65` authorization check, so production was deliberately set to `dry_run`
 - Visible production QA: manual/typed journey, `gpt-5.6-sol` brief, fail-closed gate, evidence receipt, and 320/390/desktop layouts passed
 - Known QA boundary: Chrome's native microphone permission remained pending
-- Still pending: demo video publication and Devpost submission
+- Devpost portfolio project: saved and publicly verified at `https://devpost.com/software/pulse-gkw6ul`
+- Still pending: demo video publication and an organizer-enabled late Build Week submission; the contest entry remains a closed `1/5`-step draft
 
 Provider configuration is not evidence that an outbound operation occurred. No production message or call was made for this release.
 

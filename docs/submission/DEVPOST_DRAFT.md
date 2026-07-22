@@ -1,14 +1,17 @@
 # Pulse — Devpost Submission Draft
 
-> Submission draft. Implemented code and production health facts are resolved
-> below. Public video and final Devpost submission remain pending. Never put the real
-> demo access code, a phone number, provider identifier, private transcript, or
-> patient data in this repository.
+> The portfolio project was saved and publicly verified at
+> `https://devpost.com/software/pulse-gkw6ul`. The OpenAI Build Week entry remains
+> a closed `Draft — 1/5 steps done`; public video and final contest submission are
+> pending an organizer-enabled late-submission link. Never put the real demo
+> access code, a phone number, provider identifier, private transcript, or patient
+> data in this repository.
 
 ## Required submission fields
 
 | Devpost field | Draft value | Final check |
 | --- | --- | --- |
+| Public project | `https://devpost.com/software/pulse-gkw6ul` | Saved with story, tags, links, thumbnail, and three captioned screenshots; unauthenticated HTTP 200 verified. |
 | Project name | **Pulse** | Confirm exact capitalization. |
 | Elevator pitch | **A bystander-first incident brief that turns panic into a reviewable, evidence-aware controlled handoff.** | Keep the controlled-prototype boundary. |
 | Category | **Apps for Your Life** | Confirm the category remains available in the form. |

@@ -11,6 +11,7 @@ contacted.
 | Field | Value |
 | --- | --- |
 | Production URL | `https://savepulse.vercel.app` |
+| Public Devpost project | `https://devpost.com/software/pulse-gkw6ul` — saved and unauthenticated HTTP 200 verified July 22, 2026 |
 | Pre-extension baseline | `a83e85c` |
 | Deployed application commit | `e7e4bd9` (`e7e4bd933ea644bf5d6ef7542a06f498fd8defcf`) |
 | Vercel deployment | `dpl_8mHxF7LejANyF4jFFtjKrvpDTvma` |
@@ -20,7 +21,7 @@ contacted.
 | Controlled recipient | None in this release: the existing configured destination did not pass the required Singapore `+65` authorization check |
 | Outbound result | No SMS, webhook, or call was sent |
 | Visible E2E | Completed July 22, 2026 from approximately 01:10–01:14 IST |
-| Current limitation | Chrome's native microphone permission remained pending; public video and Devpost submission remain pending |
+| Current limitation | Chrome's native microphone permission remained pending; public video remains pending; the Build Week entry is closed at `Draft — 1/5 steps done` until an organizer grants late-submission access |
 
 The live-capable transport code remains fixed-destination and fail-closed. Vapi
 and Twilio configuration passing a health probe does not mean that either

@@ -3,7 +3,9 @@
 > This document separates the pre-existing Pulse prototype from the meaningful
 > extension created during the OpenAI Build Week eligibility period. Implemented
 > and deployed work is commit-backed below; the visible manual/typed production
-> journey is complete, while video and Devpost completion remain pending.
+> journey and public Devpost portfolio project are complete. Video publication and
+> the closed Build Week contest submission remain pending organizer-enabled late
+> access.
 
 ## Eligibility baseline
 
