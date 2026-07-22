@@ -169,6 +169,14 @@ Codex session ID, and requested either a private late-submission link or a brief
 reopening of the existing draft. Gmail displayed `Message sent`. This was an
 official event-manager route; the address was not inferred or guessed.
 
+At 10:03 IST, Codex performed a final targeted response check covering the
+Devpost manager thread, OpenAI Support, the published hackathon manager, Devpost
+support/testing, and the two published judge addresses. No new response or
+private link was present. Opening draft `1080636` still returned: `Sorry! This
+hackathon is no longer accepting submissions. The submission can't be edited or
+viewed.` Submission therefore requires a new organizer-controlled state change;
+no further message was sent during this check.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
