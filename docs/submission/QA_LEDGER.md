@@ -160,6 +160,15 @@ late-submission link, approval, or event-operations decision. The Devpost manage
 thread also remained unanswered at the time of this check, so no submission
 permission is inferred.
 
+At approximately 10:00 IST, the closed Build Week page exposed an official
+`Email the hackathon manager` link for `shawni@devpost.com`. Codex sent one
+direct, factual appeal to that published address. The message identified draft
+`1080636` and support case `11899844`, explained the missed personal attestation,
+linked the production site, public project, repository, this ledger, and the
+Codex session ID, and requested either a private late-submission link or a brief
+reopening of the existing draft. Gmail displayed `Message sent`. This was an
+official event-manager route; the address was not inferred or guessed.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
