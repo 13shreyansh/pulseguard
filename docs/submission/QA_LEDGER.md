@@ -153,6 +153,13 @@ event owner. No guessed address was used for Thibault Sottiaux, Tara Seshan, or
 Leah Belsky. An immediate targeted Gmail check showed no delivery failure for the
 support or judge messages.
 
+At 09:55 IST, OpenAI Support acknowledged the routing request as case
+`11899844` and stated that it had been escalated to a support specialist, with a
+response expected in the coming days. The acknowledgement did not include a
+late-submission link, approval, or event-operations decision. The Devpost manager
+thread also remained unanswered at the time of this check, so no submission
+permission is inferred.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
