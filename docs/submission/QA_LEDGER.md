@@ -193,6 +193,15 @@ final deadline from the initially published 5:00 PM PT to **6:00 PM PT on July
 5:00 PM reference. This correction does not claim that submission succeeded or
 that late access has been granted.
 
+At approximately 10:11 IST (12:41 SGT), the registered inbox received two
+automated responses. The published `build-week-event@openai.com` Google Group
+again rejected delivery. OpenAI Support opened case `11900336` and stated that
+OpenAI product support cannot reopen Devpost drafts or provide late-submission
+links. No delivery failure was shown for `shawni@devpost.com`, Devpost support,
+or Devpost testing. The Devpost manager thread still contained no organizer
+reply, so the actionable request remains with the published hackathon manager
+and Devpost operations; Codex did not send another duplicate message.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
