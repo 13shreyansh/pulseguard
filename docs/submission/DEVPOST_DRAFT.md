@@ -5,9 +5,11 @@
 > a closed `Draft — 1/5 steps done`; public video and final contest submission are
 > pending an organizer-enabled late-submission link. A private request containing
 > the Codex session ID and release evidence was sent to the organizer on July 22,
-> 2026 at approximately 09:45 IST and visibly confirmed by Devpost. Never put the
-> real demo access code, a phone number, provider identifier, private transcript,
-> or patient data in this repository.
+> 2026 at approximately 09:45 IST and visibly confirmed by Devpost. A separate
+> email escalation was sent at approximately 09:50 IST to the official Build Week
+> event address, copying Devpost's public testing and support contacts. Never put
+> the real demo access code, a phone number, provider identifier, private
+> transcript, or patient data in this repository.
 
 ## Required submission fields
 

@@ -130,6 +130,15 @@ personal rules attestation and Submit action were not completed before the
 deadline. An organizer-provided late-submission link remains pending and is not
 assumed.
 
+At approximately July 22, 2026 at 09:50 IST, Codex sent a separate escalation
+from the project owner's signed-in Gmail account to the publicly listed event
+address `build-week-event@openai.com`, copying Devpost's public testing and support
+addresses `testing@devpost.com` and `support@devpost.com`. Gmail displayed
+`Message sent`. The email apologized, accepted responsibility for the missed
+personal attestation, linked the same session and release evidence, and requested
+that the case be routed to Build Week submission operations. No private staff
+email address was guessed or scraped.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
