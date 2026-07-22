@@ -177,6 +177,22 @@ hackathon is no longer accepting submissions. The submission can't be edited or
 viewed.` Submission therefore requires a new organizer-controlled state change;
 no further message was sent during this check.
 
+At approximately 10:10 IST (12:40 SGT), Codex sent a fresh appeal from
+`SHREYANS002@e.ntu.edu.sg`, the account shown in Outlook as the Build Week
+registration and Devpost-account inbox. The message was addressed to the
+published hackathon manager and event mailbox, with Devpost testing/support and
+OpenAI Support copied. It explicitly stated that Codex made the execution error,
+asked that the failure not prejudice Shreyansh or Pulse, and preserved the
+requirement that Shreyansh personally make the rules attestation if access is
+restored. Outlook Sent Items shows the message with subject `From registered
+Devpost account: Codex execution error — Pulse draft 1080636`.
+
+That registered inbox also contains Devpost's official notice extending the
+final deadline from the initially published 5:00 PM PT to **6:00 PM PT on July
+21**. The registered-account appeal corrected the earlier recovery messages'
+5:00 PM reference. This correction does not claim that submission succeeded or
+that late access has been granted.
+
 The eligible-period application is deployed at commit `e7e4bd9` in
 verification-only mode. The visible manual/typed production path, GPT‑5.6 brief,
 private gate, responsive layouts, and terminal evidence receipt passed. Voice
